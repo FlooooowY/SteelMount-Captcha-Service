@@ -1,0 +1,81 @@
+server:
+  min_port: 38000
+  max_port: 40000
+  shutdown_timeout: 600s
+  read_timeout: 30s
+  write_timeout: 30s
+
+redis:
+  url: 'redis://localhost:6379'
+  pool_size: 100
+  min_idle_conns: 10
+  max_retries: 3
+  dial_timeout: 5s
+  read_timeout: 3s
+  write_timeout: 3s
+
+captcha:
+  max_active_challenges: 10000
+  memory_limit_gb: 8
+  target_rps: 100
+  challenge_timeout: 300s
+  cleanup_interval: 60s
+
+  # Drag & Drop captcha settings
+  drag_drop:
+    min_objects: 3
+    max_objects: 8
+    canvas_width: 400
+    canvas_height: 300
+
+  # Click captcha settings
+  click:
+    min_clicks: 2
+    max_clicks: 5
+    click_radius: 20
+
+  # Swipe captcha settings
+  swipe:
+    min_swipes: 1
+    max_swipes: 3
+    swipe_threshold: 50
+
+security:
+  rate_limit:
+    requests_per_minute: 60
+    burst_size: 10
+    cleanup_interval: 60s
+
+  ip_blocking:
+    enabled: true
+    max_failed_attempts: 5
+    block_duration: 300s
+    cleanup_interval: 300s
+
+  bot_detection:
+    enabled: true
+    suspicious_patterns:
+      - 'headless'
+      - 'bot'
+      - 'crawler'
+      - 'spider'
+
+monitoring:
+  prometheus_port: 9090
+  metrics_path: '/metrics'
+  health_check_path: '/health'
+
+  logging:
+    level: 'info'
+    format: 'json'
+    output: 'stdout'
+
+  tracing:
+    enabled: false
+    jaeger_endpoint: 'http://localhost:14268/api/traces'
+
+balancer:
+  registration_interval: 1s
+  heartbeat_timeout: 30s
+  max_retry_attempts: 3
+  retry_delay: 5s
