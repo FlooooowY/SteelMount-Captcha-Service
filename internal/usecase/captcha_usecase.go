@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/captcha"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/domain"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/repository"
 	"github.com/google/uuid"
@@ -24,6 +25,7 @@ type CaptchaUsecase interface {
 type captchaUsecase struct {
 	challengeRepo repository.ChallengeRepository
 	config        *Config
+	engine        *captcha.Engine
 }
 
 // Config represents the usecase configuration
@@ -38,6 +40,7 @@ func NewCaptchaUsecase(challengeRepo repository.ChallengeRepository, config *Con
 	return &captchaUsecase{
 		challengeRepo: challengeRepo,
 		config:        config,
+		engine:        captcha.NewEngine(400, 300), // Default canvas size
 	}
 }
 
@@ -55,8 +58,8 @@ func (u *captchaUsecase) CreateChallenge(ctx context.Context, complexity int32) 
 	// Determine challenge type based on complexity
 	challengeType := u.determineChallengeType(complexity)
 
-	// Generate challenge content
-	html, answer, err := u.generateChallengeContent(challengeType, complexity)
+	// Generate challenge content using engine
+	html, answer, err := u.engine.GenerateChallenge(string(challengeType), complexity)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate challenge content: %w", err)
 	}
@@ -176,104 +179,6 @@ func (u *captchaUsecase) determineChallengeType(complexity int32) domain.Challen
 	}
 }
 
-// generateChallengeContent generates HTML and answer for a challenge
-func (u *captchaUsecase) generateChallengeContent(challengeType domain.ChallengeType, complexity int32) (string, interface{}, error) {
-	switch challengeType {
-	case domain.ChallengeTypeClick:
-		return u.generateClickChallenge(complexity)
-	case domain.ChallengeTypeDragDrop:
-		return u.generateDragDropChallenge(complexity)
-	case domain.ChallengeTypeSwipe:
-		return u.generateSwipeChallenge(complexity)
-	case domain.ChallengeTypeGame:
-		return u.generateGameChallenge(complexity)
-	default:
-		return "", nil, fmt.Errorf("unknown challenge type: %s", challengeType)
-	}
-}
-
-// generateClickChallenge generates a click-based challenge
-func (u *captchaUsecase) generateClickChallenge(complexity int32) (string, interface{}, error) {
-	// TODO: Implement click challenge generation
-	html := `
-		<div id="captcha-container">
-			<h3>Click Challenge</h3>
-			<p>Click on the correct answer</p>
-			<button onclick="handleClick(1)">Option 1</button>
-			<button onclick="handleClick(2)">Option 2</button>
-			<button onclick="handleClick(3)">Option 3</button>
-		</div>
-		<script>
-			function handleClick(option) {
-				window.top.postMessage({
-					type: 'captcha:sendData',
-					data: option.toString()
-				}, '*');
-			}
-		</script>
-	`
-	
-	answer := 2 // Correct answer
-	return html, answer, nil
-}
-
-// generateDragDropChallenge generates a drag-and-drop challenge
-func (u *captchaUsecase) generateDragDropChallenge(complexity int32) (string, interface{}, error) {
-	// TODO: Implement drag-drop challenge generation
-	html := `
-		<div id="captcha-container">
-			<h3>Drag & Drop Challenge</h3>
-			<p>Drag the items to the correct positions</p>
-			<div id="drop-zone" style="border: 2px dashed #ccc; padding: 20px; margin: 10px;">
-				Drop items here
-			</div>
-		</div>
-		<script>
-			// TODO: Implement drag-drop functionality
-		</script>
-	`
-	
-	answer := "correct_sequence" // Correct sequence
-	return html, answer, nil
-}
-
-// generateSwipeChallenge generates a swipe-based challenge
-func (u *captchaUsecase) generateSwipeChallenge(complexity int32) (string, interface{}, error) {
-	// TODO: Implement swipe challenge generation
-	html := `
-		<div id="captcha-container">
-			<h3>Swipe Challenge</h3>
-			<p>Swipe in the correct direction</p>
-			<div id="swipe-area" style="border: 2px solid #ccc; padding: 20px; margin: 10px;">
-				Swipe here
-			</div>
-		</div>
-		<script>
-			// TODO: Implement swipe functionality
-		</script>
-	`
-	
-	answer := "right" // Correct direction
-	return html, answer, nil
-}
-
-// generateGameChallenge generates a game-based challenge
-func (u *captchaUsecase) generateGameChallenge(complexity int32) (string, interface{}, error) {
-	// TODO: Implement game challenge generation
-	html := `
-		<div id="captcha-container">
-			<h3>Game Challenge</h3>
-			<p>Complete the mini-game</p>
-			<canvas id="game-canvas" width="400" height="300" style="border: 1px solid #ccc;"></canvas>
-		</div>
-		<script>
-			// TODO: Implement game functionality
-		</script>
-	`
-	
-	answer := "game_completed" // Game completion
-	return html, answer, nil
-}
 
 // validateAnswer validates a challenge answer
 func (u *captchaUsecase) validateAnswer(challenge *domain.Challenge, answer interface{}) (bool, int32) {
