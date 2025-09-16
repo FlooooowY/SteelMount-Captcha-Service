@@ -96,25 +96,25 @@ func (u *captchaUsecase) ValidateChallenge(ctx context.Context, challengeID stri
 	// Check if challenge is expired
 	if time.Now().After(challenge.ExpiresAt) {
 		return &domain.ChallengeResult{
-			ChallengeID:      challengeID,
-			Solved:           false,
+			ChallengeID:       challengeID,
+			Solved:            false,
 			ConfidencePercent: 0,
-			Error:            "challenge expired",
+			Error:             "challenge expired",
 		}, nil
 	}
 
 	// Check if already solved
 	if challenge.Solved {
 		return &domain.ChallengeResult{
-			ChallengeID:      challengeID,
-			Solved:           true,
+			ChallengeID:       challengeID,
+			Solved:            true,
 			ConfidencePercent: 100,
 		}, nil
 	}
 
 	// Validate answer
 	isValid, confidence := u.validateAnswer(challenge, answer)
-	
+
 	// Update challenge if solved
 	if isValid {
 		challenge.Solved = true
@@ -122,11 +122,11 @@ func (u *captchaUsecase) ValidateChallenge(ctx context.Context, challengeID stri
 	}
 
 	return &domain.ChallengeResult{
-		ChallengeID:      challengeID,
-		Solved:           isValid,
+		ChallengeID:       challengeID,
+		Solved:            isValid,
 		ConfidencePercent: confidence,
-		TimeToSolve:      time.Since(challenge.CreatedAt).Milliseconds(),
-		Attempts:         1, // TODO: Track actual attempts
+		TimeToSolve:       time.Since(challenge.CreatedAt).Milliseconds(),
+		Attempts:          1, // TODO: Track actual attempts
 	}, nil
 }
 
@@ -179,12 +179,11 @@ func (u *captchaUsecase) determineChallengeType(complexity int32) domain.Challen
 	}
 }
 
-
 // validateAnswer validates a challenge answer
 func (u *captchaUsecase) validateAnswer(challenge *domain.Challenge, answer interface{}) (bool, int32) {
 	// Simple validation logic
 	// TODO: Implement proper validation based on challenge type
-	
+
 	switch challenge.Type {
 	case domain.ChallengeTypeClick:
 		return u.validateClickAnswer(challenge.Answer, answer)

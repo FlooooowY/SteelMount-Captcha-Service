@@ -9,6 +9,7 @@ import (
 
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/config"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/logger"
+	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/websocket"
 	"google.golang.org/grpc"
 )
 
@@ -21,8 +22,13 @@ type Server struct {
 	grpcServer *grpc.Server
 	listener   net.Listener
 
+	// WebSocket server
+	wsService *websocket.WebSocketService
+	wsServer  *websocket.HTTPServer
+
 	// Server state
 	port       int
+	wsPort     int
 	instanceID string
 
 	// Graceful shutdown
@@ -48,12 +54,25 @@ func New(cfg *config.Config) (*Server, error) {
 		shutdownCh: make(chan struct{}),
 	}
 
-	// Find available port
+	// Find available port for gRPC
 	port, err := srv.findAvailablePort()
 	if err != nil {
 		return nil, fmt.Errorf("failed to find available port: %w", err)
 	}
 	srv.port = port
+
+	// Find available port for WebSocket
+	wsPort, err := srv.findAvailablePort()
+	if err != nil {
+		return nil, fmt.Errorf("failed to find available WebSocket port: %w", err)
+	}
+	srv.wsPort = wsPort
+
+	// Create WebSocket service
+	srv.wsService = websocket.NewWebSocketService()
+
+	// Create WebSocket HTTP server
+	srv.wsServer = websocket.NewHTTPServer(srv.wsService, srv.wsPort)
 
 	// Create gRPC server
 	srv.grpcServer = grpc.NewServer(
@@ -64,7 +83,7 @@ func New(cfg *config.Config) (*Server, error) {
 	// Register services
 	srv.registerServices()
 
-	log.Infof("Server created with instance ID: %s, port: %d", instanceID, port)
+	log.Infof("Server created with instance ID: %s, gRPC port: %d, WebSocket port: %d", instanceID, port, wsPort)
 
 	return srv, nil
 }
@@ -91,6 +110,17 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}()
 
+	// Start WebSocket server in a goroutine
+	s.shutdownWG.Add(1)
+	go func() {
+		defer s.shutdownWG.Done()
+
+		s.logger.Infof("Starting WebSocket server on port %d", s.wsPort)
+		if err := s.wsServer.Start(ctx); err != nil {
+			s.logger.Errorf("WebSocket server error: %v", err)
+		}
+	}()
+
 	// Start balancer registration
 	s.shutdownWG.Add(1)
 	go func() {
@@ -112,19 +142,35 @@ func (s *Server) Stop(ctx context.Context) error {
 	close(s.shutdownCh)
 
 	// Stop gRPC server gracefully
-	done := make(chan struct{})
+	grpcDone := make(chan struct{})
 	go func() {
 		s.grpcServer.GracefulStop()
-		close(done)
+		close(grpcDone)
+	}()
+
+	// Stop WebSocket server gracefully
+	wsDone := make(chan struct{})
+	go func() {
+		if err := s.wsServer.Stop(ctx); err != nil {
+			s.logger.Errorf("Error stopping WebSocket server: %v", err)
+		}
+		close(wsDone)
 	}()
 
 	// Wait for graceful stop or timeout
 	select {
-	case <-done:
+	case <-grpcDone:
 		s.logger.Info("gRPC server stopped gracefully")
 	case <-ctx.Done():
-		s.logger.Warn("Graceful stop timeout, forcing stop")
+		s.logger.Warn("Graceful stop timeout, forcing gRPC stop")
 		s.grpcServer.Stop()
+	}
+
+	select {
+	case <-wsDone:
+		s.logger.Info("WebSocket server stopped gracefully")
+	case <-ctx.Done():
+		s.logger.Warn("WebSocket stop timeout")
 	}
 
 	// Wait for all goroutines to finish
@@ -149,9 +195,19 @@ func (s *Server) GetPort() int {
 	return s.port
 }
 
+// GetWebSocketPort returns the WebSocket server port
+func (s *Server) GetWebSocketPort() int {
+	return s.wsPort
+}
+
 // GetInstanceID returns the server instance ID
 func (s *Server) GetInstanceID() string {
 	return s.instanceID
+}
+
+// GetWebSocketService returns the WebSocket service
+func (s *Server) GetWebSocketService() *websocket.WebSocketService {
+	return s.wsService
 }
 
 // findAvailablePort finds an available port in the configured range

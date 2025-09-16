@@ -9,37 +9,37 @@ import (
 
 // DragDropCaptcha represents a drag and drop captcha
 type DragDropCaptcha struct {
-	ID          string        `json:"id"`
-	Objects     []DragObject  `json:"objects"`
-	Targets     []DropTarget  `json:"targets"`
+	ID           string       `json:"id"`
+	Objects      []DragObject `json:"objects"`
+	Targets      []DropTarget `json:"targets"`
 	Instructions string       `json:"instructions"`
-	CanvasWidth int          `json:"canvas_width"`
-	CanvasHeight int         `json:"canvas_height"`
+	CanvasWidth  int          `json:"canvas_width"`
+	CanvasHeight int          `json:"canvas_height"`
 }
 
 // DragObject represents a draggable object
 type DragObject struct {
-	ID       string  `json:"id"`
-	X        int     `json:"x"`
-	Y        int     `json:"y"`
-	Width    int     `json:"width"`
-	Height   int     `json:"height"`
-	Color    string  `json:"color"`
-	Shape    string  `json:"shape"`
-	Text     string  `json:"text,omitempty"`
+	ID            string `json:"id"`
+	X             int    `json:"x"`
+	Y             int    `json:"y"`
+	Width         int    `json:"width"`
+	Height        int    `json:"height"`
+	Color         string `json:"color"`
+	Shape         string `json:"shape"`
+	Text          string `json:"text,omitempty"`
 	CorrectTarget string `json:"correct_target"`
 }
 
 // DropTarget represents a drop target
 type DropTarget struct {
-	ID       string  `json:"id"`
-	X        int     `json:"x"`
-	Y        int     `json:"y"`
-	Width    int     `json:"width"`
-	Height   int     `json:"height"`
-	Color    string  `json:"color"`
-	Shape    string  `json:"shape"`
-	Text     string  `json:"text,omitempty"`
+	ID     string `json:"id"`
+	X      int    `json:"x"`
+	Y      int    `json:"y"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+	Color  string `json:"color"`
+	Shape  string `json:"shape"`
+	Text   string `json:"text,omitempty"`
 }
 
 // DragDropGenerator generates drag and drop captchas
@@ -64,20 +64,20 @@ func NewDragDropGenerator(canvasWidth, canvasHeight, minObjects, maxObjects int)
 func (g *DragDropGenerator) Generate(complexity int32) (*DragDropCaptcha, interface{}, error) {
 	// Determine number of objects based on complexity
 	numObjects := g.calculateObjectCount(complexity)
-	
+
 	// Generate objects and targets
 	objects, targets, correctSequence := g.generateObjectsAndTargets(numObjects)
-	
+
 	// Create captcha
 	captcha := &DragDropCaptcha{
-		ID:          fmt.Sprintf("dragdrop_%d", time.Now().UnixNano()),
-		Objects:     objects,
-		Targets:     targets,
+		ID:           fmt.Sprintf("dragdrop_%d", time.Now().UnixNano()),
+		Objects:      objects,
+		Targets:      targets,
 		Instructions: g.generateInstructions(complexity),
-		CanvasWidth: g.canvasWidth,
+		CanvasWidth:  g.canvasWidth,
 		CanvasHeight: g.canvasHeight,
 	}
-	
+
 	return captcha, correctSequence, nil
 }
 
@@ -88,7 +88,7 @@ func (g *DragDropGenerator) GenerateHTML(captcha *DragDropCaptcha) (string, erro
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal captcha: %w", err)
 	}
-	
+
 	html := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -310,9 +310,9 @@ func (g *DragDropGenerator) GenerateHTML(captcha *DragDropCaptcha) (string, erro
         document.addEventListener('DOMContentLoaded', initCaptcha);
     </script>
 </body>
-</html>`, 
+</html>`,
 		g.canvasWidth, g.canvasWidth, g.canvasHeight, captcha.Instructions, string(captchaJSON))
-	
+
 	return html, nil
 }
 
@@ -321,7 +321,7 @@ func (g *DragDropGenerator) calculateObjectCount(complexity int32) int {
 	// More complexity = more objects
 	baseCount := g.minObjects
 	maxCount := g.maxObjects
-	
+
 	if complexity < 30 {
 		return baseCount
 	} else if complexity < 60 {
@@ -336,15 +336,15 @@ func (g *DragDropGenerator) calculateObjectCount(complexity int32) int {
 // generateObjectsAndTargets generates objects and targets for the captcha
 func (g *DragDropGenerator) generateObjectsAndTargets(numObjects int) ([]DragObject, []DropTarget, map[string]string) {
 	rand.Seed(time.Now().UnixNano())
-	
+
 	objects := make([]DragObject, numObjects)
 	targets := make([]DropTarget, numObjects)
 	correctSequence := make(map[string]string)
-	
+
 	// Generate shapes and colors
 	shapes := []string{"circle", "square", "triangle", "diamond"}
 	colors := []string{"#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#feca57", "#ff9ff3", "#54a0ff", "#5f27cd"}
-	
+
 	for i := 0; i < numObjects; i++ {
 		// Generate object
 		obj := DragObject{
@@ -357,7 +357,7 @@ func (g *DragDropGenerator) generateObjectsAndTargets(numObjects int) ([]DragObj
 			Shape:  shapes[rand.Intn(len(shapes))],
 			Text:   fmt.Sprintf("%d", i+1),
 		}
-		
+
 		// Generate corresponding target
 		target := DropTarget{
 			ID:     fmt.Sprintf("target_%d", i),
@@ -369,15 +369,15 @@ func (g *DragDropGenerator) generateObjectsAndTargets(numObjects int) ([]DragObj
 			Shape:  "square",
 			Text:   fmt.Sprintf("Drop %d here", i+1),
 		}
-		
+
 		// Ensure objects and targets don't overlap
 		g.avoidOverlap(&obj, &target, objects, targets)
-		
+
 		objects[i] = obj
 		targets[i] = target
 		correctSequence[obj.ID] = target.ID
 	}
-	
+
 	return objects, targets, correctSequence
 }
 
@@ -385,10 +385,10 @@ func (g *DragDropGenerator) generateObjectsAndTargets(numObjects int) ([]DragObj
 func (g *DragDropGenerator) avoidOverlap(obj *DragObject, target *DropTarget, existingObjects []DragObject, existingTargets []DropTarget) {
 	maxAttempts := 50
 	attempts := 0
-	
+
 	for attempts < maxAttempts {
 		overlaps := false
-		
+
 		// Check overlap with existing objects
 		for _, existing := range existingObjects {
 			if g.checkOverlap(obj.X, obj.Y, obj.Width, obj.Height, existing.X, existing.Y, existing.Width, existing.Height) {
@@ -396,7 +396,7 @@ func (g *DragDropGenerator) avoidOverlap(obj *DragObject, target *DropTarget, ex
 				break
 			}
 		}
-		
+
 		// Check overlap with existing targets
 		if !overlaps {
 			for _, existing := range existingTargets {
@@ -406,17 +406,17 @@ func (g *DragDropGenerator) avoidOverlap(obj *DragObject, target *DropTarget, ex
 				}
 			}
 		}
-		
+
 		if !overlaps {
 			break
 		}
-		
+
 		// Reposition
 		obj.X = rand.Intn(g.canvasWidth - obj.Width)
 		obj.Y = rand.Intn(g.canvasHeight - obj.Height)
 		target.X = rand.Intn(g.canvasWidth - target.Width)
 		target.Y = rand.Intn(g.canvasHeight - target.Height)
-		
+
 		attempts++
 	}
 }
@@ -434,6 +434,6 @@ func (g *DragDropGenerator) generateInstructions(complexity int32) string {
 		"Arrange the objects in the correct order by dragging them",
 		"Place each numbered item in its designated drop zone",
 	}
-	
+
 	return instructions[rand.Intn(len(instructions))]
 }

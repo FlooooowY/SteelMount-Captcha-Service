@@ -11,11 +11,11 @@ type Engine struct {
 	dragDropGenerator *DragDropGenerator
 	clickGenerator    *ClickGenerator
 	swipeGenerator    *SwipeGenerator
-	
+
 	// Performance tracking
-	generationCount   int64
-	generationTime    time.Duration
-	mu                sync.RWMutex
+	generationCount int64
+	generationTime  time.Duration
+	mu              sync.RWMutex
 }
 
 // NewEngine creates a new captcha engine
@@ -36,7 +36,7 @@ func (e *Engine) GenerateChallenge(challengeType string, complexity int32) (stri
 		e.generationTime += time.Since(start)
 		e.mu.Unlock()
 	}()
-	
+
 	switch challengeType {
 	case "drag_drop":
 		return e.generateDragDrop(complexity)
@@ -55,12 +55,12 @@ func (e *Engine) generateDragDrop(complexity int32) (string, interface{}, error)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to generate drag-drop captcha: %w", err)
 	}
-	
+
 	html, err := e.dragDropGenerator.GenerateHTML(captcha)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to generate drag-drop HTML: %w", err)
 	}
-	
+
 	return html, answer, nil
 }
 
@@ -70,12 +70,12 @@ func (e *Engine) generateClick(complexity int32) (string, interface{}, error) {
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to generate click captcha: %w", err)
 	}
-	
+
 	html, err := e.clickGenerator.GenerateHTML(captcha)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to generate click HTML: %w", err)
 	}
-	
+
 	return html, answer, nil
 }
 
@@ -85,12 +85,12 @@ func (e *Engine) generateSwipe(complexity int32) (string, interface{}, error) {
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to generate swipe captcha: %w", err)
 	}
-	
+
 	html, err := e.swipeGenerator.GenerateHTML(captcha)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to generate swipe HTML: %w", err)
 	}
-	
+
 	return html, answer, nil
 }
 
@@ -98,12 +98,12 @@ func (e *Engine) generateSwipe(complexity int32) (string, interface{}, error) {
 func (e *Engine) GetStats() map[string]interface{} {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	
+
 	var avgTime time.Duration
 	if e.generationCount > 0 {
 		avgTime = e.generationTime / time.Duration(e.generationCount)
 	}
-	
+
 	return map[string]interface{}{
 		"total_generations": e.generationCount,
 		"total_time":        e.generationTime.Milliseconds(),
@@ -116,11 +116,11 @@ func (e *Engine) GetStats() map[string]interface{} {
 func (e *Engine) calculateRPS() float64 {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	
+
 	if e.generationTime == 0 {
 		return 0
 	}
-	
+
 	return float64(e.generationCount) / e.generationTime.Seconds()
 }
 
@@ -128,7 +128,7 @@ func (e *Engine) calculateRPS() float64 {
 func (e *Engine) ResetStats() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	e.generationCount = 0
 	e.generationTime = 0
 }
