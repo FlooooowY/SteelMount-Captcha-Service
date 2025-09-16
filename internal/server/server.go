@@ -9,6 +9,9 @@ import (
 
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/config"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/logger"
+	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/redis"
+	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/security"
+	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/transport/grpc"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/websocket"
 	"google.golang.org/grpc"
 )
@@ -25,6 +28,11 @@ type Server struct {
 	// WebSocket server
 	wsService *websocket.WebSocketService
 	wsServer  *websocket.HTTPServer
+
+	// Security
+	redisClient     *redis.Client
+	securityService *security.SecurityService
+	securityMW      *grpc.SecurityMiddleware
 
 	// Server state
 	port       int
@@ -68,14 +76,56 @@ func New(cfg *config.Config) (*Server, error) {
 	}
 	srv.wsPort = wsPort
 
+	// Create Redis client
+	redisClient, err := redis.NewClient(&cfg.Redis)
+	if err != nil {
+		log.Warnf("Failed to create Redis client: %v, using local-only mode", err)
+		redisClient = nil
+	}
+	srv.redisClient = redisClient
+
+	// Create security service
+	securityConfig := &security.SecurityConfig{
+		RateLimitConfig: security.RateLimitConfig{
+			Enabled:           true,
+			RequestsPerMinute: cfg.Security.RateLimit.RequestsPerMinute,
+			BurstSize:         cfg.Security.RateLimit.BurstSize,
+			Window:            time.Minute,
+		},
+		IPBlockingConfig: security.IPBlockingConfig{
+			Enabled:           cfg.Security.IPBlocking.Enabled,
+			MaxFailedAttempts: cfg.Security.IPBlocking.MaxFailedAttempts,
+			BlockDuration:     cfg.Security.IPBlocking.BlockDuration,
+			CleanupInterval:   cfg.Security.IPBlocking.CleanupInterval,
+		},
+		BotDetectionConfig: security.BotDetectionConfig{
+			Enabled:         cfg.Security.BotDetection.Enabled,
+			MinBotScore:     0.4,
+			HighBotScore:    0.7,
+			CleanupInterval: time.Hour,
+		},
+	}
+	
+	var redisClientForSecurity *redis.Client
+	if redisClient != nil {
+		redisClientForSecurity = redisClient.GetClient()
+	}
+	
+	srv.securityService = security.NewSecurityService(redisClientForSecurity, securityConfig)
+
+	// Create security middleware
+	srv.securityMW = grpc.NewSecurityMiddleware(srv.securityService)
+
 	// Create WebSocket service
 	srv.wsService = websocket.NewWebSocketService()
 
 	// Create WebSocket HTTP server
 	srv.wsServer = websocket.NewHTTPServer(srv.wsService, srv.wsPort)
 
-	// Create gRPC server
+	// Create gRPC server with security middleware
 	srv.grpcServer = grpc.NewServer(
+		grpc.UnaryInterceptor(srv.securityMW.UnaryInterceptor()),
+		grpc.StreamInterceptor(srv.securityMW.StreamInterceptor()),
 		grpc.MaxRecvMsgSize(4*1024*1024), // 4MB
 		grpc.MaxSendMsgSize(4*1024*1024), // 4MB
 	)
@@ -121,6 +171,13 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}()
 
+	// Start security cleanup routine
+	s.shutdownWG.Add(1)
+	go func() {
+		defer s.shutdownWG.Done()
+		s.startSecurityCleanup(ctx)
+	}()
+
 	// Start balancer registration
 	s.shutdownWG.Add(1)
 	go func() {
@@ -156,6 +213,13 @@ func (s *Server) Stop(ctx context.Context) error {
 		}
 		close(wsDone)
 	}()
+
+	// Close Redis client
+	if s.redisClient != nil {
+		if err := s.redisClient.Close(); err != nil {
+			s.logger.Errorf("Error closing Redis client: %v", err)
+		}
+	}
 
 	// Wait for graceful stop or timeout
 	select {
@@ -210,6 +274,22 @@ func (s *Server) GetWebSocketService() *websocket.WebSocketService {
 	return s.wsService
 }
 
+// GetSecurityService returns the security service
+func (s *Server) GetSecurityService() *security.SecurityService {
+	return s.securityService
+}
+
+// GetSecurityStats returns security statistics
+func (s *Server) GetSecurityStats() map[string]interface{} {
+	stats := s.securityService.GetStats()
+	
+	if s.redisClient != nil {
+		stats["redis"] = s.redisClient.GetStats()
+	}
+	
+	return stats
+}
+
 // findAvailablePort finds an available port in the configured range
 func (s *Server) findAvailablePort() (int, error) {
 	for port := s.config.Server.MinPort; port <= s.config.Server.MaxPort; port++ {
@@ -244,6 +324,26 @@ func (s *Server) startBalancerRegistration(ctx context.Context) {
 			return
 		case <-ticker.C:
 			s.logger.Debug("Sending heartbeat to balancer")
+		}
+	}
+}
+
+// startSecurityCleanup starts the security cleanup routine
+func (s *Server) startSecurityCleanup(ctx context.Context) {
+	ticker := time.NewTicker(s.config.Security.RateLimit.CleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			s.logger.Info("Security cleanup stopped")
+			return
+		case <-s.shutdownCh:
+			s.logger.Info("Security cleanup stopped due to shutdown")
+			return
+		case <-ticker.C:
+			s.logger.Debug("Running security cleanup")
+			s.securityService.Cleanup()
 		}
 	}
 }
