@@ -169,6 +169,7 @@ func (s *Server) findAvailablePort() (int, error) {
 
 // registerServices registers gRPC services
 func (s *Server) registerServices() {
+	// TODO: Register captcha service when usecase is ready
 	s.logger.Info("Services registered")
 }
 
