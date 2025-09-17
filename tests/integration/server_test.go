@@ -42,19 +42,19 @@ func TestServer_StartStop(t *testing.T) {
 				CleanupInterval:   1 * time.Minute,
 			},
 			IPBlocking: config.IPBlockingConfig{
-				Enabled:             true,
-				MaxFailedAttempts:   5,
-				BlockDuration:       5 * time.Minute,
-				CleanupInterval:     5 * time.Minute,
+				Enabled:           true,
+				MaxFailedAttempts: 5,
+				BlockDuration:     5 * time.Minute,
+				CleanupInterval:   5 * time.Minute,
 			},
 			BotDetection: config.BotDetectionConfig{
-				Enabled:         true,
+				Enabled:            true,
 				SuspiciousPatterns: []string{"bot", "crawler", "spider"},
 			},
 		},
 		Monitoring: config.MonitoringConfig{
-			PrometheusPort: 9090,
-			MetricsPath:    "/metrics",
+			PrometheusPort:  9090,
+			MetricsPath:     "/metrics",
 			HealthCheckPath: "/health",
 		},
 		Balancer: config.BalancerConfig{
@@ -64,57 +64,57 @@ func TestServer_StartStop(t *testing.T) {
 			RetryDelay:           5 * time.Second,
 		},
 	}
-	
+
 	// Create server
 	srv, err := server.New(cfg)
 	if err != nil {
 		t.Fatalf("Failed to create server: %v", err)
 	}
-	
+
 	// Test server creation
 	if srv == nil {
 		t.Fatal("Server is nil")
 	}
-	
+
 	// Test server properties
 	if srv.GetPort() == 0 {
 		t.Error("Server port should be set")
 	}
-	
+
 	if srv.GetWebSocketPort() == 0 {
 		t.Error("WebSocket port should be set")
 	}
-	
+
 	if srv.GetMetricsPort() == 0 {
 		t.Error("Metrics port should be set")
 	}
-	
+
 	if srv.GetInstanceID() == "" {
 		t.Error("Instance ID should be set")
 	}
-	
+
 	// Test server start (with timeout)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	// Start server in goroutine
 	startErr := make(chan error, 1)
 	go func() {
 		startErr <- srv.Start(ctx)
 	}()
-	
+
 	// Wait a bit for server to start
 	time.Sleep(100 * time.Millisecond)
-	
+
 	// Test server stop
 	stopCtx, stopCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer stopCancel()
-	
+
 	err = srv.Stop(stopCtx)
 	if err != nil {
 		t.Errorf("Failed to stop server: %v", err)
 	}
-	
+
 	// Check if start returned an error (context cancelled is expected)
 	select {
 	case err := <-startErr:
@@ -129,11 +129,11 @@ func TestServer_StartStop(t *testing.T) {
 func TestServer_WithNilConfig(t *testing.T) {
 	// Test server creation with nil config
 	srv, err := server.New(nil)
-	
+
 	if err == nil {
 		t.Error("Expected error with nil config, got nil")
 	}
-	
+
 	if srv != nil {
 		t.Error("Expected nil server with nil config")
 	}
@@ -183,34 +183,34 @@ func TestServer_PortDiscovery(t *testing.T) {
 			RetryDelay:           5 * time.Second,
 		},
 	}
-	
+
 	// Create first server
 	srv1, err := server.New(cfg)
 	if err != nil {
 		t.Fatalf("Failed to create first server: %v", err)
 	}
-	
+
 	// Create second server
 	srv2, err := server.New(cfg)
 	if err != nil {
 		t.Fatalf("Failed to create second server: %v", err)
 	}
-	
+
 	// Ports should be different
 	if srv1.GetPort() == srv2.GetPort() {
 		t.Errorf("Servers should have different ports: %d", srv1.GetPort())
 	}
-	
+
 	if srv1.GetWebSocketPort() == srv2.GetWebSocketPort() {
 		t.Errorf("Servers should have different WebSocket ports: %d", srv1.GetWebSocketPort())
 	}
-	
+
 	if srv1.GetMetricsPort() == srv2.GetMetricsPort() {
 		t.Errorf("Servers should have different metrics ports: %d", srv1.GetMetricsPort())
 	}
-	
-	t.Logf("Server 1 - gRPC: %d, WebSocket: %d, Metrics: %d", 
+
+	t.Logf("Server 1 - gRPC: %d, WebSocket: %d, Metrics: %d",
 		srv1.GetPort(), srv1.GetWebSocketPort(), srv1.GetMetricsPort())
-	t.Logf("Server 2 - gRPC: %d, WebSocket: %d, Metrics: %d", 
+	t.Logf("Server 2 - gRPC: %d, WebSocket: %d, Metrics: %d",
 		srv2.GetPort(), srv2.GetWebSocketPort(), srv2.GetMetricsPort())
 }

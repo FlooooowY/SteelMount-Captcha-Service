@@ -17,26 +17,32 @@ tests/
 ## Test Categories
 
 ### Unit Tests (`tests/unit/`)
+
 - **captcha_engine_test.go** - Tests for captcha generation engine
 - **rate_limiter_test.go** - Tests for rate limiting functionality
 - **bot_detector_test.go** - Tests for bot detection algorithms
 
 ### Integration Tests (`tests/integration/`)
+
 - **server_test.go** - Tests for server startup, shutdown, and port discovery
 
 ### Performance Tests (`tests/performance/`)
+
 - **load_test.go** - Load testing for RPS targets and memory usage
 
 ### Security Tests (`tests/security/`)
+
 - **security_test.go** - Tests for IP blocking, rate limiting, and bot detection
 
 ## Running Tests
 
 ### Prerequisites
+
 - Go 1.21+
 - Redis (optional, for integration tests)
 
 ### Quick Start
+
 ```bash
 # Run all unit tests
 make test
@@ -49,6 +55,7 @@ make test-coverage
 ```
 
 ### Individual Test Categories
+
 ```bash
 # Unit tests only
 make test-unit
@@ -64,6 +71,7 @@ make test-security
 ```
 
 ### Specific Tests
+
 ```bash
 # Run specific test
 make test-specific TEST=TestCaptchaGenerationRPS
@@ -75,12 +83,14 @@ make test-bench
 ## Test Requirements
 
 ### Performance Targets
+
 - **Captcha Generation**: ≥100 RPS per type
 - **Security Checks**: ≥500 RPS
 - **Concurrent Processing**: ≥200 RPS with 50 goroutines
 - **Memory Usage**: <1KB per captcha
 
 ### Security Requirements
+
 - **Rate Limiting**: Blocks requests exceeding limits
 - **IP Blocking**: Blocks IPs after failed attempts
 - **Bot Detection**: Detects suspicious patterns
@@ -89,6 +99,7 @@ make test-bench
 ## Test Configuration
 
 Tests use minimal configuration to avoid external dependencies:
+
 - Redis is optional (local-only mode when unavailable)
 - Port ranges are limited to avoid conflicts
 - Timeouts are set appropriately for CI/CD
@@ -96,6 +107,7 @@ Tests use minimal configuration to avoid external dependencies:
 ## Continuous Integration
 
 Tests are designed to run in CI/CD environments:
+
 - No external dependencies required
 - Deterministic results
 - Appropriate timeouts
@@ -104,11 +116,13 @@ Tests are designed to run in CI/CD environments:
 ## Coverage
 
 Run tests with coverage to see code coverage:
+
 ```bash
 make test-coverage
 ```
 
 This generates:
+
 - `coverage.out` - Coverage data file
 - `coverage.html` - HTML coverage report
 
@@ -122,6 +136,7 @@ This generates:
 4. **Race conditions**: Use `-race` flag for detection
 
 ### Debug Mode
+
 ```bash
 # Run with verbose output
 go test -v -race ./tests/unit/...
@@ -138,12 +153,14 @@ go test -v -race -run TestSpecific ./tests/...
 4. **Security Tests**: Add to `tests/security/` for security features
 
 ### Test Naming Convention
+
 - `TestComponent_Function` - Unit tests
 - `TestIntegration_Feature` - Integration tests
 - `TestPerformance_Metric` - Performance tests
 - `TestSecurity_Feature` - Security tests
 
 ### Best Practices
+
 - Use table-driven tests for multiple scenarios
 - Include performance assertions for critical paths
 - Test both success and failure cases
