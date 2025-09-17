@@ -9,6 +9,7 @@ import (
 
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/config"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/logger"
+	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/monitoring"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/redis"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/security"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/transport/grpc"
@@ -34,9 +35,15 @@ type Server struct {
 	securityService *security.SecurityService
 	securityMW      *grpc.SecurityMiddleware
 
+	// Monitoring
+	metrics         *monitoring.Metrics
+	metricsMW       *monitoring.MetricsMiddleware
+	prometheusServer *monitoring.PrometheusServer
+
 	// Server state
 	port       int
 	wsPort     int
+	metricsPort int
 	instanceID string
 
 	// Graceful shutdown
@@ -75,6 +82,13 @@ func New(cfg *config.Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to find available WebSocket port: %w", err)
 	}
 	srv.wsPort = wsPort
+
+	// Find available port for metrics
+	metricsPort, err := srv.findAvailablePort()
+	if err != nil {
+		return nil, fmt.Errorf("failed to find available metrics port: %w", err)
+	}
+	srv.metricsPort = metricsPort
 
 	// Create Redis client
 	redisClient, err := redis.NewClient(&cfg.Redis)
@@ -116,16 +130,27 @@ func New(cfg *config.Config) (*Server, error) {
 	// Create security middleware
 	srv.securityMW = grpc.NewSecurityMiddleware(srv.securityService)
 
+	// Create monitoring
+	srv.metrics = monitoring.NewMetrics()
+	srv.metricsMW = monitoring.NewMetricsMiddleware(srv.metrics)
+	srv.prometheusServer = monitoring.NewPrometheusServer(srv.metricsPort, srv.metrics)
+
 	// Create WebSocket service
 	srv.wsService = websocket.NewWebSocketService()
 
 	// Create WebSocket HTTP server
 	srv.wsServer = websocket.NewHTTPServer(srv.wsService, srv.wsPort)
 
-	// Create gRPC server with security middleware
+	// Create gRPC server with security and metrics middleware
 	srv.grpcServer = grpc.NewServer(
-		grpc.UnaryInterceptor(srv.securityMW.UnaryInterceptor()),
-		grpc.StreamInterceptor(srv.securityMW.StreamInterceptor()),
+		grpc.ChainUnaryInterceptor(
+			srv.securityMW.UnaryInterceptor(),
+			srv.metricsMW.GRPCMetricsInterceptor(),
+		),
+		grpc.ChainStreamInterceptor(
+			srv.securityMW.StreamInterceptor(),
+			// Add stream metrics interceptor here if needed
+		),
 		grpc.MaxRecvMsgSize(4*1024*1024), // 4MB
 		grpc.MaxSendMsgSize(4*1024*1024), // 4MB
 	)
@@ -133,7 +158,7 @@ func New(cfg *config.Config) (*Server, error) {
 	// Register services
 	srv.registerServices()
 
-	log.Infof("Server created with instance ID: %s, gRPC port: %d, WebSocket port: %d", instanceID, port, wsPort)
+	log.Infof("Server created with instance ID: %s, gRPC port: %d, WebSocket port: %d, metrics port: %d", instanceID, port, wsPort, srv.metricsPort)
 
 	return srv, nil
 }
@@ -168,6 +193,17 @@ func (s *Server) Start(ctx context.Context) error {
 		s.logger.Infof("Starting WebSocket server on port %d", s.wsPort)
 		if err := s.wsServer.Start(ctx); err != nil {
 			s.logger.Errorf("WebSocket server error: %v", err)
+		}
+	}()
+
+	// Start Prometheus server in a goroutine
+	s.shutdownWG.Add(1)
+	go func() {
+		defer s.shutdownWG.Done()
+
+		s.logger.Infof("Starting Prometheus server on port %d", s.metricsPort)
+		if err := s.prometheusServer.Start(ctx); err != nil {
+			s.logger.Errorf("Prometheus server error: %v", err)
 		}
 	}()
 
@@ -214,6 +250,15 @@ func (s *Server) Stop(ctx context.Context) error {
 		close(wsDone)
 	}()
 
+	// Stop Prometheus server gracefully
+	prometheusDone := make(chan struct{})
+	go func() {
+		if err := s.prometheusServer.Stop(ctx); err != nil {
+			s.logger.Errorf("Error stopping Prometheus server: %v", err)
+		}
+		close(prometheusDone)
+	}()
+
 	// Close Redis client
 	if s.redisClient != nil {
 		if err := s.redisClient.Close(); err != nil {
@@ -235,6 +280,13 @@ func (s *Server) Stop(ctx context.Context) error {
 		s.logger.Info("WebSocket server stopped gracefully")
 	case <-ctx.Done():
 		s.logger.Warn("WebSocket stop timeout")
+	}
+
+	select {
+	case <-prometheusDone:
+		s.logger.Info("Prometheus server stopped gracefully")
+	case <-ctx.Done():
+		s.logger.Warn("Prometheus stop timeout")
 	}
 
 	// Wait for all goroutines to finish
@@ -288,6 +340,21 @@ func (s *Server) GetSecurityStats() map[string]interface{} {
 	}
 	
 	return stats
+}
+
+// GetMetricsPort returns the metrics server port
+func (s *Server) GetMetricsPort() int {
+	return s.metricsPort
+}
+
+// GetMetrics returns the metrics instance
+func (s *Server) GetMetrics() *monitoring.Metrics {
+	return s.metrics
+}
+
+// GetMetricsMiddleware returns the metrics middleware
+func (s *Server) GetMetricsMiddleware() *monitoring.MetricsMiddleware {
+	return s.metricsMW
 }
 
 // findAvailablePort finds an available port in the configured range
