@@ -7,15 +7,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/config"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/logger"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/monitoring"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/redis"
+	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/repository"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/security"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/transport/grpc"
+	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/usecase"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/websocket"
+	pb "github.com/FlooooowY/SteelMount-Captcha-Service/proto/captcha/v1"
 	redisLib "github.com/go-redis/redis/v8"
 	grpcLib "google.golang.org/grpc"
 )
@@ -79,15 +83,15 @@ func New(cfg *config.Config) (*Server, error) {
 	}
 	srv.port = port
 
-	// Find available port for WebSocket
-	wsPort, err := srv.findAvailablePort()
+	// Find available port for WebSocket (start from gRPC port + 1)
+	wsPort, err := srv.findAvailablePortFrom(port + 1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find available WebSocket port: %w", err)
 	}
 	srv.wsPort = wsPort
 
-	// Find available port for metrics
-	metricsPort, err := srv.findAvailablePort()
+	// Find available port for metrics (start from WebSocket port + 1)
+	metricsPort, err := srv.findAvailablePortFrom(wsPort + 1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find available metrics port: %w", err)
 	}
@@ -133,8 +137,9 @@ func New(cfg *config.Config) (*Server, error) {
 	// Create security middleware
 	srv.securityMW = grpc.NewSecurityMiddleware(srv.securityService)
 
-	// Create monitoring
-	srv.metrics = monitoring.NewMetrics()
+	// Create monitoring with custom registry to avoid duplicate registration
+	registry := prometheus.NewRegistry()
+	srv.metrics = monitoring.NewMetricsWithRegistry(registry)
 	srv.metricsMW = monitoring.NewMetricsMiddleware(srv.metrics)
 	srv.prometheusServer = monitoring.NewPrometheusServer(srv.metricsPort, srv.metrics)
 
@@ -362,20 +367,37 @@ func (s *Server) GetMetricsMiddleware() *monitoring.MetricsMiddleware {
 
 // findAvailablePort finds an available port in the configured range
 func (s *Server) findAvailablePort() (int, error) {
-	for port := s.config.Server.MinPort; port <= s.config.Server.MaxPort; port++ {
+	return s.findAvailablePortFrom(s.config.Server.MinPort)
+}
+
+// findAvailablePortFrom finds an available port starting from the specified port
+func (s *Server) findAvailablePortFrom(startPort int) (int, error) {
+	for port := startPort; port <= s.config.Server.MaxPort; port++ {
 		addr := fmt.Sprintf(":%d", port)
 		listener, err := net.Listen("tcp", addr)
 		if err == nil {
 			listener.Close()
+			// Add delay to ensure port is fully released
+			time.Sleep(50 * time.Millisecond)
 			return port, nil
 		}
 	}
-	return 0, fmt.Errorf("no available ports in range %d-%d", s.config.Server.MinPort, s.config.Server.MaxPort)
+	return 0, fmt.Errorf("no available ports in range %d-%d", startPort, s.config.Server.MaxPort)
 }
 
 // registerServices registers gRPC services
 func (s *Server) registerServices() {
-	// TODO: Register captcha service when usecase is ready
+	// Register gRPC services
+	challengeRepo := repository.NewInMemoryChallengeRepository()
+	usecaseConfig := &usecase.Config{
+		MaxActiveChallenges: s.config.Captcha.MaxActiveChallenges,
+		ChallengeTimeout:    time.Minute * 5,  // 5 minutes timeout
+		CleanupInterval:     time.Minute * 10, // Cleanup every 10 minutes
+	}
+	captchaUsecase := usecase.NewCaptchaUsecase(challengeRepo, usecaseConfig)
+	captchaService := grpc.NewCaptchaService(captchaUsecase)
+
+	pb.RegisterCaptchaServiceServer(s.grpcServer, captchaService)
 	s.logger.Info("Services registered")
 }
 

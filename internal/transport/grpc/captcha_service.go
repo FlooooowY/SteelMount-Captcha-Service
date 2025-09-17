@@ -93,7 +93,7 @@ func (s *CaptchaService) sendServerEvent(stream pb.CaptchaService_MakeEventStrea
 		serverEvent.Event = &pb.ServerEvent_Result{
 			Result: &pb.ServerEvent_ChallengeResult{
 				ChallengeId:       event.ChallengeID,
-				ConfidencePercent: 100, // TODO: Get from event data
+				ConfidencePercent: event.ConfidencePercent,
 			},
 		}
 	case domain.ServerEventTypeRunClientJS:

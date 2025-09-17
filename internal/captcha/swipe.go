@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
 	"time"
 )
 
@@ -318,8 +319,12 @@ func (g *SwipeGenerator) GenerateHTML(captcha *SwipeCaptcha) (string, error) {
             endDrag(touch.clientX, touch.clientY);
         }
         
+        let gameCompleted = false;
+        let errorCount = 0;
+        const maxErrors = 1;
+        
         function endDrag(x, y) {
-            if (!dragElement) return;
+            if (!dragElement || gameCompleted) return;
             
             const deltaX = x - startX;
             const deltaY = y - startY;
@@ -340,10 +345,38 @@ func (g *SwipeGenerator) GenerateHTML(captcha *SwipeCaptcha) (string, error) {
                         direction: direction,
                         distance: distance
                     });
+                    
+                    // Disable this area
+                    dragElement.style.pointerEvents = 'none';
+                    dragElement.style.cursor = 'default';
+                    
+                    // Check if game is completed
+                    const requiredAreas = captchaData.swipe_areas.filter(area => area.required);
+                    if (completedSwipes.size >= requiredAreas.length) {
+                        gameCompleted = true;
+                        // Disable all areas
+                        document.querySelectorAll('.swipe-area').forEach(area => {
+                            area.style.pointerEvents = 'none';
+                            area.style.opacity = '0.8';
+                        });
+                    }
                 } else {
                     // Incorrect swipe
+                    errorCount++;
                     dragElement.classList.remove('dragging');
                     dragElement.classList.add('incorrect');
+                    
+                    // Check if too many errors
+                    if (errorCount >= maxErrors) {
+                        gameCompleted = true;
+                        showErrorMessage('Wrong swipe! Getting new captcha...');
+                        // Immediately request new captcha
+                        setTimeout(() => {
+                            requestNewCaptcha();
+                        }, 1000);
+                        return;
+                    }
+                    
                     setTimeout(() => {
                         dragElement.classList.remove('incorrect');
                         // Reset position
@@ -380,6 +413,13 @@ func (g *SwipeGenerator) GenerateHTML(captcha *SwipeCaptcha) (string, error) {
             }
         }
         
+        function showErrorMessage(message) {
+            const progress = document.getElementById('progress');
+            progress.textContent = message;
+            progress.style.color = '#dc3545';
+            progress.style.fontWeight = 'bold';
+        }
+        
         function updateProgress() {
             const requiredAreas = captchaData.swipe_areas.filter(area => area.required);
             const completedRequired = requiredAreas.filter(area => completedSwipes.has(area.id));
@@ -387,15 +427,27 @@ func (g *SwipeGenerator) GenerateHTML(captcha *SwipeCaptcha) (string, error) {
             const progress = document.getElementById('progress');
             const submitBtn = document.getElementById('submitBtn');
             
-            if (completedRequired.length === requiredAreas.length) {
-                progress.textContent = 'All required swipes completed! You can submit now.';
+            if (gameCompleted && errorCount < maxErrors) {
+                progress.textContent = 'Perfect! All swipes completed correctly. You can submit now.';
                 progress.style.color = '#28a745';
                 submitBtn.disabled = false;
             } else {
-                progress.textContent = 'Completed ' + completedRequired.length + ' of ' + requiredAreas.length + ' required swipes';
+                progress.textContent = 'Swipe areas in the correct direction (' + completedRequired.length + '/' + requiredAreas.length + ' completed) | One mistake = new captcha!';
                 progress.style.color = '#666';
                 submitBtn.disabled = true;
             }
+        }
+        
+        function requestNewCaptcha() {
+            // Request new captcha from parent window
+            window.top.postMessage({
+                type: 'captcha:requestNew',
+                data: JSON.stringify({
+                    reason: 'too_many_errors',
+                    currentCaptchaId: captchaData.id,
+                    captchaType: 'swipe'
+                })
+            }, '*');
         }
         
         function submitSolution() {
@@ -409,6 +461,15 @@ func (g *SwipeGenerator) GenerateHTML(captcha *SwipeCaptcha) (string, error) {
                 })
             }, '*');
         }
+        
+        // Listen for messages from server
+        window.addEventListener('message', function(e) {
+            if (e.data && e.data.type === 'captcha:serverData') {
+                // Handle server data
+                console.log('Received server data:', e.data.data);
+                // Process server response if needed
+            }
+        });
         
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', initCaptcha);
@@ -440,12 +501,33 @@ func (g *SwipeGenerator) calculateSwipeCount(complexity int32) int {
 
 // generateSwipeAreas generates swipe areas for the captcha
 func (g *SwipeGenerator) generateSwipeAreas(numSwipes int) ([]SwipeArea, []map[string]interface{}) {
-	rand.Seed(time.Now().UnixNano())
+	// Ultra-random seed for infinite variations
+	// Ultra-enhanced seed for infinite variations
+	seed := time.Now().UnixNano() + 
+		int64(rand.Intn(1000000)) + 
+		int64(numSwipes*11117) + 
+		int64(g.canvasWidth*g.canvasHeight) + 
+		int64(time.Now().Nanosecond()) + 
+		int64(os.Getpid()*17)
+	rand.Seed(seed)
 
 	swipeAreas := make([]SwipeArea, numSwipes)
 	correctSequence := make([]map[string]interface{}, 0, numSwipes)
 
-	directions := []string{"left", "right", "up", "down"}
+	// Expanded directions for more variety (including diagonal)
+	directions := []string{
+		"left", "right", "up", "down",
+		"up-left", "up-right", "down-left", "down-right",
+		"circle-clockwise", "circle-counter", "zigzag-horizontal", "zigzag-vertical",
+	}
+	
+	// Advanced shuffling with multiple passes for maximum randomness
+	for pass := 0; pass < 7; pass++ {
+		for i := range directions {
+			j := rand.Intn(len(directions))
+			directions[i], directions[j] = directions[j], directions[i]
+		}
+	}
 
 	for i := 0; i < numSwipes; i++ {
 		// Generate random position

@@ -173,7 +173,7 @@ func (bd *BotDetector) analyzeUserAgent(userAgent string) (float64, []string) {
 	
 	for _, botPattern := range botPatterns {
 		if strings.Contains(strings.ToLower(userAgent), botPattern) {
-			score += 0.2
+			score += 0.3  // Increased weight for bot patterns
 			reasons = append(reasons, fmt.Sprintf("Bot user agent detected: %s", botPattern))
 		}
 	}

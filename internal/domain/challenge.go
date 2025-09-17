@@ -6,15 +6,15 @@ import (
 
 // Challenge represents a captcha challenge
 type Challenge struct {
-	ID          string            `json:"id"`
-	Type        ChallengeType     `json:"type"`
-	Complexity  int32             `json:"complexity"`
-	HTML        string            `json:"html"`
-	Answer      interface{}       `json:"-"` // Hidden from JSON
-	CreatedAt   time.Time         `json:"created_at"`
-	ExpiresAt   time.Time         `json:"expires_at"`
-	Solved      bool              `json:"solved"`
-	Metadata    map[string]string `json:"metadata"`
+	ID         string            `json:"id"`
+	Type       ChallengeType     `json:"type"`
+	Complexity int32             `json:"complexity"`
+	HTML       string            `json:"html"`
+	Answer     interface{}       `json:"-"` // Hidden from JSON
+	CreatedAt  time.Time         `json:"created_at"`
+	ExpiresAt  time.Time         `json:"expires_at"`
+	Solved     bool              `json:"solved"`
+	Metadata   map[string]string `json:"metadata"`
 }
 
 // ChallengeType represents the type of captcha challenge
@@ -29,12 +29,12 @@ const (
 
 // ChallengeResult represents the result of solving a challenge
 type ChallengeResult struct {
-	ChallengeID      string  `json:"challenge_id"`
-	Solved           bool    `json:"solved"`
+	ChallengeID       string `json:"challenge_id"`
+	Solved            bool   `json:"solved"`
 	ConfidencePercent int32  `json:"confidence_percent"`
-	TimeToSolve      int64   `json:"time_to_solve_ms"`
-	Attempts         int32   `json:"attempts"`
-	Error            string  `json:"error,omitempty"`
+	TimeToSolve       int64  `json:"time_to_solve_ms"`
+	Attempts          int32  `json:"attempts"`
+	Error             string `json:"error,omitempty"`
 }
 
 // Event represents a client or server event
@@ -56,11 +56,12 @@ const (
 
 // ServerEvent represents an event sent from server to client
 type ServerEvent struct {
-	Type        ServerEventType `json:"type"`
-	ChallengeID string          `json:"challenge_id"`
-	Data        []byte          `json:"data"`
-	JSCode      string          `json:"js_code,omitempty"`
-	Timestamp   time.Time       `json:"timestamp"`
+	Type              ServerEventType `json:"type"`
+	ChallengeID       string          `json:"challenge_id"`
+	Data              []byte          `json:"data"`
+	JSCode            string          `json:"js_code,omitempty"`
+	ConfidencePercent int32           `json:"confidence_percent,omitempty"`
+	Timestamp         time.Time       `json:"timestamp"`
 }
 
 // ServerEventType represents the type of server event

@@ -83,5 +83,6 @@ build/
 # Test data
 testdata/
 
-# Requirements and documentation files
-captcha_requirements*.md
+
+Техническое задание.md
+

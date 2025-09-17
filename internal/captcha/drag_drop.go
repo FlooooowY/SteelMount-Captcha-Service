@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"os"
 	"time"
 )
 
@@ -168,6 +169,20 @@ func (g *DragDropGenerator) GenerateHTML(captcha *DragDropCaptcha) (string, erro
         .drop-target.incorrect {
             border-color: #dc3545;
             background: rgba(220,53,69,0.2);
+            animation: shake 0.5s;
+        }
+        .drag-object.correct-drop {
+            border: 2px solid #28a745;
+            box-shadow: 0 0 15px rgba(40,167,69,0.5);
+        }
+        .drag-object.incorrect-drop {
+            border: 2px solid #dc3545;
+            animation: shake 0.5s;
+        }
+        @keyframes shake {
+            0%%, 100%% { transform: translateX(0); }
+            25%% { transform: translateX(-5px); }
+            75%% { transform: translateX(5px); }
         }
         .submit-btn {
             display: block;
@@ -246,6 +261,9 @@ func (g *DragDropGenerator) GenerateHTML(captcha *DragDropCaptcha) (string, erro
                 targetEl.addEventListener('dragenter', handleDragEnter);
                 targetEl.addEventListener('dragleave', handleDragLeave);
             });
+            
+            // Initialize progress
+            updateProgress();
         }
         
         function handleDragStart(e) {
@@ -272,26 +290,142 @@ func (g *DragDropGenerator) GenerateHTML(captcha *DragDropCaptcha) (string, erro
             e.target.classList.remove('drag-over');
         }
         
+        let gameCompleted = false;
+        let errorCount = 0;
+        const maxErrors = 1;
+        
         function handleDrop(e) {
             e.preventDefault();
             e.target.classList.remove('drag-over');
             
-            if (draggedElement) {
+            if (draggedElement && !gameCompleted) {
                 const targetId = e.target.id.replace('target-', '');
                 const objectId = draggedElement.id.replace('obj-', '');
                 
-                // Update solution
-                solution[objectId] = targetId;
+                // Find the object and target data
+                const objectData = captchaData.objects.find(obj => obj.id === objectId);
+                const targetData = captchaData.targets.find(target => target.id === targetId);
                 
-                // Move object to target
-                const rect = e.target.getBoundingClientRect();
-                const canvasRect = document.getElementById('canvas').getBoundingClientRect();
-                draggedElement.style.left = (rect.left - canvasRect.left) + 'px';
-                draggedElement.style.top = (rect.top - canvasRect.top) + 'px';
+                if (objectData && targetData) {
+                    // Check if this is the correct target
+                    const isCorrect = objectData.correct_target === targetId;
+                    
+                    if (isCorrect) {
+                        // Correct drop
+                        solution[objectId] = targetId;
+                        
+                        // Move object to target center
+                        const rect = e.target.getBoundingClientRect();
+                        const canvasRect = document.getElementById('canvas').getBoundingClientRect();
+                        const centerX = rect.left - canvasRect.left + (rect.width / 2) - (draggedElement.offsetWidth / 2);
+                        const centerY = rect.top - canvasRect.top + (rect.height / 2) - (draggedElement.offsetHeight / 2);
+                        
+                        draggedElement.style.left = centerX + 'px';
+                        draggedElement.style.top = centerY + 'px';
+                        
+                        // Mark target and object as correct
+                        e.target.classList.add('correct');
+                        draggedElement.classList.add('correct-drop');
+                        
+                        // Disable further dragging of this object
+                        draggedElement.draggable = false;
+                        draggedElement.style.cursor = 'default';
+                        draggedElement.style.pointerEvents = 'none';
+                        
+                        // Check if game is completed
+                        if (Object.keys(solution).length === captchaData.objects.length) {
+                            gameCompleted = true;
+                            // Disable all remaining objects
+                            document.querySelectorAll('.drag-object').forEach(obj => {
+                                obj.draggable = false;
+                                obj.style.pointerEvents = 'none';
+                                obj.style.opacity = '0.8';
+                            });
+                        }
+                    } else {
+                        // Incorrect drop
+                        errorCount++;
+                        e.target.classList.add('incorrect');
+                        draggedElement.classList.add('incorrect-drop');
+                        
+                        // Check if too many errors
+                        if (errorCount >= maxErrors) {
+                            gameCompleted = true;
+                            showErrorMessage('Wrong drop! Getting new captcha...');
+                            // Immediately request new captcha
+                            setTimeout(() => {
+                                requestNewCaptcha();
+                            }, 1000);
+                            return;
+                        }
+                        
+                        // Reset after animation
+                        setTimeout(() => {
+                            e.target.classList.remove('incorrect');
+                            draggedElement.classList.remove('incorrect-drop');
+                            
+                            // Return object to original position
+                            const originalObj = captchaData.objects.find(obj => obj.id === objectId);
+                            if (originalObj) {
+                                draggedElement.style.left = originalObj.x + 'px';
+                                draggedElement.style.top = originalObj.y + 'px';
+                            }
+                        }, 1000);
+                    }
+                }
                 
-                // Mark target as used
-                e.target.classList.add('correct');
+                updateProgress();
             }
+        }
+        
+        function showErrorMessage(message) {
+            const progress = document.getElementById('progress') || createProgressElement();
+            progress.textContent = message;
+            progress.style.color = '#dc3545';
+            progress.style.fontWeight = 'bold';
+        }
+        
+        function createProgressElement() {
+            const progressDiv = document.createElement('div');
+            progressDiv.id = 'progress';
+            progressDiv.className = 'progress';
+            progressDiv.style.textAlign = 'center';
+            progressDiv.style.marginTop = '10px';
+            progressDiv.style.fontSize = '14px';
+            progressDiv.style.color = '#666';
+            const submitBtn = document.getElementById('submitBtn');
+            document.querySelector('.captcha-container').insertBefore(progressDiv, submitBtn);
+            return progressDiv;
+        }
+        
+        function updateProgress() {
+            const totalObjects = captchaData.objects.length;
+            const correctlyPlaced = Object.keys(solution).length;
+            
+            const progress = document.getElementById('progress') || createProgressElement();
+            const submitBtn = document.getElementById('submitBtn');
+            
+            if (gameCompleted && errorCount < maxErrors) {
+                progress.textContent = 'Perfect! All objects correctly placed. You can submit now.';
+                progress.style.color = '#28a745';
+                submitBtn.disabled = false;
+            } else {
+                progress.textContent = 'Drag objects to matching targets (' + correctlyPlaced + '/' + totalObjects + ' completed) | One mistake = new captcha!';
+                progress.style.color = '#666';
+                submitBtn.disabled = true;
+            }
+        }
+        
+        function requestNewCaptcha() {
+            // Request new captcha from parent window
+            window.top.postMessage({
+                type: 'captcha:requestNew',
+                data: JSON.stringify({
+                    reason: 'too_many_errors',
+                    currentCaptchaId: captchaData.id,
+                    captchaType: 'drag_drop'
+                })
+            }, '*');
         }
         
         function submitSolution() {
@@ -305,6 +439,15 @@ func (g *DragDropGenerator) GenerateHTML(captcha *DragDropCaptcha) (string, erro
                 })
             }, '*');
         }
+        
+        // Listen for messages from server
+        window.addEventListener('message', function(e) {
+            if (e.data && e.data.type === 'captcha:serverData') {
+                // Handle server data
+                console.log('Received server data:', e.data.data);
+                // Process server response if needed
+            }
+        });
         
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', initCaptcha);
@@ -335,30 +478,54 @@ func (g *DragDropGenerator) calculateObjectCount(complexity int32) int {
 
 // generateObjectsAndTargets generates objects and targets for the captcha
 func (g *DragDropGenerator) generateObjectsAndTargets(numObjects int) ([]DragObject, []DropTarget, map[string]string) {
-	rand.Seed(time.Now().UnixNano())
+	// Ultra-random seed for infinite variations
+	// Ultra-enhanced seed for infinite variations
+	seed := time.Now().UnixNano() + 
+		int64(rand.Intn(1000000)) + 
+		int64(numObjects*9973) + 
+		int64(g.canvasWidth*g.canvasHeight) + 
+		int64(time.Now().Nanosecond()) + 
+		int64(os.Getpid()*13)
+	rand.Seed(seed)
 
 	objects := make([]DragObject, numObjects)
 	targets := make([]DropTarget, numObjects)
 	correctSequence := make(map[string]string)
 
-	// Generate shapes and colors
-	shapes := []string{"circle", "square", "triangle", "diamond"}
-	colors := []string{"#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#feca57", "#ff9ff3", "#54a0ff", "#5f27cd"}
+	// Generate shapes and colors - randomize each time
+	// Massive variety of shapes for infinite combinations
+	shapes := []string{
+		"circle", "square", "triangle", "diamond", "pentagon", "hexagon", "octagon",
+		"star", "heart", "cross", "arrow", "oval", "trapezoid", "rhombus", 
+		"parallelogram", "kite", "crescent", "flower", "butterfly", "leaf", 
+		"teardrop", "lightning", "cloud", "wave", "spiral", "gear", "shield", 
+		"crown", "key", "lock", "house", "tree", "mountain", "sun", "moon",
+	}
+	
+	// Expanded color palette with hex codes
+	colors := []string{
+		"#ff6b6b", "#4ecdc4", "#45b7d1", "#96ceb4", "#feca57", "#ff9ff3", 
+		"#54a0ff", "#5f27cd", "#fd79a8", "#fdcb6e", "#6c5ce7", "#a29bfe",
+		"#e17055", "#00b894", "#0984e3", "#6c5ce7", "#fd79a8", "#fdcb6e",
+		"#e84393", "#00cec9", "#74b9ff", "#a29bfe", "#fd79a8", "#fdcb6e",
+		"#ff7675", "#00b894", "#0984e3", "#6c5ce7", "#e84393", "#00cec9",
+		"#fab1a0", "#00b894", "#74b9ff", "#a29bfe", "#fd79a8", "#fdcb6e",
+	}
+
+	// Advanced shuffling with multiple passes for maximum randomness
+	for pass := 0; pass < 5; pass++ {
+		for i := range shapes {
+			j := rand.Intn(len(shapes))
+			shapes[i], shapes[j] = shapes[j], shapes[i]
+		}
+		for i := range colors {
+			j := rand.Intn(len(colors))
+			colors[i], colors[j] = colors[j], colors[i]
+		}
+	}
 
 	for i := 0; i < numObjects; i++ {
-		// Generate object
-		obj := DragObject{
-			ID:     fmt.Sprintf("obj_%d", i),
-			X:      rand.Intn(g.canvasWidth - 60),
-			Y:      rand.Intn(g.canvasHeight - 60),
-			Width:  50,
-			Height: 50,
-			Color:  colors[rand.Intn(len(colors))],
-			Shape:  shapes[rand.Intn(len(shapes))],
-			Text:   fmt.Sprintf("%d", i+1),
-		}
-
-		// Generate corresponding target
+		// Generate target first
 		target := DropTarget{
 			ID:     fmt.Sprintf("target_%d", i),
 			X:      rand.Intn(g.canvasWidth - 60),
@@ -368,6 +535,19 @@ func (g *DragDropGenerator) generateObjectsAndTargets(numObjects int) ([]DragObj
 			Color:  "#e9ecef",
 			Shape:  "square",
 			Text:   fmt.Sprintf("Drop %d here", i+1),
+		}
+
+		// Generate object with correct target
+		obj := DragObject{
+			ID:            fmt.Sprintf("obj_%d", i),
+			X:             rand.Intn(g.canvasWidth - 60),
+			Y:             rand.Intn(g.canvasHeight - 60),
+			Width:         50,
+			Height:        50,
+			Color:         colors[rand.Intn(len(colors))],
+			Shape:         shapes[rand.Intn(len(shapes))],
+			Text:          fmt.Sprintf("%d", i+1),
+			CorrectTarget: target.ID,
 		}
 
 		// Ensure objects and targets don't overlap

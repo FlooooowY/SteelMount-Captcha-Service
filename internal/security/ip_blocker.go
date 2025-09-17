@@ -15,6 +15,7 @@ type IPBlocker struct {
 	mu            sync.RWMutex
 	localBlocks   map[string]*BlockInfo
 	failedAttempts map[string]*AttemptInfo
+	maxFailedAttempts int
 }
 
 // BlockInfo represents information about a blocked IP
@@ -37,9 +38,20 @@ type AttemptInfo struct {
 // NewIPBlocker creates a new IP blocker
 func NewIPBlocker(redisClient *redis.Client) *IPBlocker {
 	return &IPBlocker{
-		redis:          redisClient,
-		localBlocks:    make(map[string]*BlockInfo),
-		failedAttempts: make(map[string]*AttemptInfo),
+		redis:              redisClient,
+		localBlocks:        make(map[string]*BlockInfo),
+		failedAttempts:     make(map[string]*AttemptInfo),
+		maxFailedAttempts:  5, // Default value
+	}
+}
+
+// NewIPBlockerWithConfig creates a new IP blocker with configuration
+func NewIPBlockerWithConfig(redisClient *redis.Client, maxFailedAttempts int) *IPBlocker {
+	return &IPBlocker{
+		redis:              redisClient,
+		localBlocks:        make(map[string]*BlockInfo),
+		failedAttempts:     make(map[string]*AttemptInfo),
+		maxFailedAttempts:  maxFailedAttempts,
 	}
 }
 
@@ -105,7 +117,7 @@ func (ib *IPBlocker) RecordFailedAttempt(ctx context.Context, ip string, reason 
 	}
 	
 	// Check if IP should be blocked
-	if attemptInfo.Count >= 5 { // Configurable threshold
+	if attemptInfo.Count >= ib.maxFailedAttempts {
 		ib.blockIP(ip, reason, attemptInfo.Count)
 	}
 	

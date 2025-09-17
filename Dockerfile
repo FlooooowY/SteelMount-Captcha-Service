@@ -1,60 +1,48 @@
 # Build stage
 FROM golang:1.21-alpine AS builder
 
-# Install necessary packages
-RUN apk add --no-cache git ca-certificates tzdata
+# Install build dependencies in single layer
+RUN apk add --no-cache --virtual .build-deps \
+    git \
+    ca-certificates \
+    tzdata \
+    netcat-openbsd \
+    upx
 
 # Set working directory
 WORKDIR /app
 
-# Copy go mod files
+# Copy go mod files first for better caching
 COPY go.mod go.sum ./
-
-# Download dependencies
-RUN go mod download
+RUN go mod download && go mod verify
 
 # Copy source code
 COPY . .
 
-# Generate protobuf files
-RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-RUN go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-RUN make generate
+# Build the application with optimizations
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -a -installsuffix cgo \
+    -ldflags="-w -s -X main.version=1.0.0 -X main.buildTime=$(date -u +%Y%m%d.%H%M%S)" \
+    -o captcha-service ./cmd/server
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o captcha-service ./cmd/server
+# Compress binary with UPX
+RUN upx --best --lzma captcha-service
 
-# Final stage
-FROM alpine:latest
-
-# Install ca-certificates for HTTPS requests
-RUN apk --no-cache add ca-certificates tzdata
-
-# Create non-root user
-RUN addgroup -g 1001 -S captcha && \
-    adduser -u 1001 -S captcha -G captcha
-
-# Set working directory
-WORKDIR /app
+# Final stage - use distroless for minimal attack surface
+FROM gcr.io/distroless/static-debian12:nonroot
 
 # Copy binary from builder stage
-COPY --from=builder /app/captcha-service .
+COPY --from=builder /app/captcha-service /captcha-service
 
-# Copy configuration files if any
-COPY --from=builder /app/config.yaml .
-
-# Change ownership to non-root user
-RUN chown -R captcha:captcha /app
-
-# Switch to non-root user
-USER captcha
+# Copy configuration files
+COPY --from=builder /app/config.yaml /config.yaml
 
 # Expose port range
-EXPOSE 38000-40000
+EXPOSE 38000-40000 9090
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:9090/health || exit 1
+# Set resource limits
+ENV GOMEMLIMIT=512MiB
+ENV GOGC=100
 
-# Run the application
-CMD ["./captcha-service"]
+# Run the application as non-root user
+ENTRYPOINT ["/captcha-service"]

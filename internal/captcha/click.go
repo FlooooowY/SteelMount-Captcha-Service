@@ -270,6 +270,15 @@ func (g *ClickGenerator) GenerateHTML(captcha *ClickCaptcha) (string, error) {
             }, '*');
         }
         
+        // Listen for messages from server
+        window.addEventListener('message', function(e) {
+            if (e.data && e.data.type === 'captcha:serverData') {
+                // Handle server data
+                console.log('Received server data:', e.data.data);
+                // Process server response if needed
+            }
+        });
+        
         // Initialize when page loads
         document.addEventListener('DOMContentLoaded', initCaptcha);
     </script>

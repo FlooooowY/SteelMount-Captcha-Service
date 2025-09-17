@@ -4,15 +4,14 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 // Metrics holds all Prometheus metrics
 type Metrics struct {
 	// Request metrics
-	RequestsTotal     *prometheus.CounterVec
-	RequestDuration   *prometheus.HistogramVec
-	RequestsInFlight  prometheus.Gauge
+	RequestsTotal    *prometheus.CounterVec
+	RequestDuration  *prometheus.HistogramVec
+	RequestsInFlight prometheus.Gauge
 
 	// Captcha metrics
 	CaptchaGenerated  *prometheus.CounterVec
@@ -22,16 +21,16 @@ type Metrics struct {
 	ChallengeDuration *prometheus.HistogramVec
 
 	// Security metrics
-	SecurityBlocks    *prometheus.CounterVec
-	RateLimitHits     *prometheus.CounterVec
-	BotDetections     *prometheus.CounterVec
-	BlockedIPs        prometheus.Gauge
+	SecurityBlocks *prometheus.CounterVec
+	RateLimitHits  *prometheus.CounterVec
+	BotDetections  *prometheus.CounterVec
+	BlockedIPs     prometheus.Gauge
 
 	// Performance metrics
-	MemoryUsage       prometheus.Gauge
-	CPUUsage          prometheus.Gauge
-	RPS               prometheus.Gauge
-	ResponseTime      *prometheus.HistogramVec
+	MemoryUsage  prometheus.Gauge
+	CPUUsage     prometheus.Gauge
+	RPS          prometheus.Gauge
+	ResponseTime *prometheus.HistogramVec
 
 	// WebSocket metrics
 	WebSocketConnections prometheus.Gauge
@@ -41,16 +40,26 @@ type Metrics struct {
 
 // NewMetrics creates a new metrics instance
 func NewMetrics() *Metrics {
-	return &Metrics{
+	return newMetricsWithRegistry(prometheus.DefaultRegisterer)
+}
+
+// NewMetricsWithRegistry creates a new metrics instance with custom registry
+func NewMetricsWithRegistry(registry prometheus.Registerer) *Metrics {
+	return newMetricsWithRegistry(registry)
+}
+
+// newMetricsWithRegistry creates metrics with specified registry
+func newMetricsWithRegistry(registry prometheus.Registerer) *Metrics {
+	metrics := &Metrics{
 		// Request metrics
-		RequestsTotal: promauto.NewCounterVec(
+		RequestsTotal: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "captcha_requests_total",
 				Help: "Total number of requests",
 			},
 			[]string{"method", "endpoint", "status"},
 		),
-		RequestDuration: promauto.NewHistogramVec(
+		RequestDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "captcha_request_duration_seconds",
 				Help:    "Request duration in seconds",
@@ -58,7 +67,7 @@ func NewMetrics() *Metrics {
 			},
 			[]string{"method", "endpoint"},
 		),
-		RequestsInFlight: promauto.NewGauge(
+		RequestsInFlight: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "captcha_requests_in_flight",
 				Help: "Number of requests currently being processed",
@@ -66,34 +75,34 @@ func NewMetrics() *Metrics {
 		),
 
 		// Captcha metrics
-		CaptchaGenerated: promauto.NewCounterVec(
+		CaptchaGenerated: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "captcha_generated_total",
 				Help: "Total number of captchas generated",
 			},
 			[]string{"type", "complexity"},
 		),
-		CaptchaValidated: promauto.NewCounterVec(
+		CaptchaValidated: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "captcha_validated_total",
 				Help: "Total number of captchas validated",
 			},
 			[]string{"type", "result"},
 		),
-		CaptchaErrors: promauto.NewCounterVec(
+		CaptchaErrors: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "captcha_errors_total",
 				Help: "Total number of captcha errors",
 			},
 			[]string{"type", "error"},
 		),
-		ActiveChallenges: promauto.NewGauge(
+		ActiveChallenges: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "captcha_active_challenges",
 				Help: "Number of active captcha challenges",
 			},
 		),
-		ChallengeDuration: promauto.NewHistogramVec(
+		ChallengeDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "captcha_challenge_duration_seconds",
 				Help:    "Captcha challenge duration in seconds",
@@ -103,28 +112,28 @@ func NewMetrics() *Metrics {
 		),
 
 		// Security metrics
-		SecurityBlocks: promauto.NewCounterVec(
+		SecurityBlocks: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "captcha_security_blocks_total",
 				Help: "Total number of security blocks",
 			},
 			[]string{"reason", "type"},
 		),
-		RateLimitHits: promauto.NewCounterVec(
+		RateLimitHits: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "captcha_rate_limit_hits_total",
 				Help: "Total number of rate limit hits",
 			},
 			[]string{"ip", "endpoint"},
 		),
-		BotDetections: promauto.NewCounterVec(
+		BotDetections: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "captcha_bot_detections_total",
 				Help: "Total number of bot detections",
 			},
 			[]string{"ip", "reason"},
 		),
-		BlockedIPs: promauto.NewGauge(
+		BlockedIPs: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "captcha_blocked_ips",
 				Help: "Number of currently blocked IPs",
@@ -132,25 +141,25 @@ func NewMetrics() *Metrics {
 		),
 
 		// Performance metrics
-		MemoryUsage: promauto.NewGauge(
+		MemoryUsage: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "captcha_memory_usage_bytes",
 				Help: "Current memory usage in bytes",
 			},
 		),
-		CPUUsage: promauto.NewGauge(
+		CPUUsage: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "captcha_cpu_usage_percent",
 				Help: "Current CPU usage percentage",
 			},
 		),
-		RPS: promauto.NewGauge(
+		RPS: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "captcha_requests_per_second",
 				Help: "Current requests per second",
 			},
 		),
-		ResponseTime: promauto.NewHistogramVec(
+		ResponseTime: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "captcha_response_time_seconds",
 				Help:    "Response time in seconds",
@@ -160,20 +169,20 @@ func NewMetrics() *Metrics {
 		),
 
 		// WebSocket metrics
-		WebSocketConnections: promauto.NewGauge(
+		WebSocketConnections: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "captcha_websocket_connections",
 				Help: "Number of active WebSocket connections",
 			},
 		),
-		WebSocketEvents: promauto.NewCounterVec(
+		WebSocketEvents: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "captcha_websocket_events_total",
 				Help: "Total number of WebSocket events",
 			},
 			[]string{"type", "client_id"},
 		),
-		WebSocketErrors: promauto.NewCounterVec(
+		WebSocketErrors: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "captcha_websocket_errors_total",
 				Help: "Total number of WebSocket errors",
@@ -181,6 +190,31 @@ func NewMetrics() *Metrics {
 			[]string{"type", "error"},
 		),
 	}
+
+	// Register all metrics with the registry
+	registry.MustRegister(
+		metrics.RequestsTotal,
+		metrics.RequestDuration,
+		metrics.RequestsInFlight,
+		metrics.CaptchaGenerated,
+		metrics.CaptchaValidated,
+		metrics.CaptchaErrors,
+		metrics.ActiveChallenges,
+		metrics.ChallengeDuration,
+		metrics.SecurityBlocks,
+		metrics.RateLimitHits,
+		metrics.BotDetections,
+		metrics.BlockedIPs,
+		metrics.MemoryUsage,
+		metrics.CPUUsage,
+		metrics.RPS,
+		metrics.ResponseTime,
+		metrics.WebSocketConnections,
+		metrics.WebSocketEvents,
+		metrics.WebSocketErrors,
+	)
+
+	return metrics
 }
 
 // RecordRequest records a request metric

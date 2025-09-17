@@ -143,7 +143,10 @@ func TestMemoryUsage(t *testing.T) {
 	var m2 runtime.MemStats
 	runtime.ReadMemStats(&m2)
 
-	memoryUsed := m2.Alloc - m1.Alloc
+	memoryUsed := int64(m2.Alloc) - int64(m1.Alloc)
+	if memoryUsed < 0 {
+		memoryUsed = 0 // GC freed more than allocated
+	}
 	memoryPerCaptcha := float64(memoryUsed) / float64(iterations)
 
 	t.Logf("Memory used: %d bytes (%d KB)", memoryUsed, memoryUsed/1024)
