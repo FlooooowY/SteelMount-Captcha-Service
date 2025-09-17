@@ -9,33 +9,33 @@ import (
 
 // SwipeCaptcha represents a swipe-based captcha
 type SwipeCaptcha struct {
-	ID          string      `json:"id"`
-	Image       string      `json:"image"`
-	SwipeAreas  []SwipeArea `json:"swipe_areas"`
-	Instructions string     `json:"instructions"`
-	CanvasWidth int        `json:"canvas_width"`
-	CanvasHeight int       `json:"canvas_height"`
+	ID           string      `json:"id"`
+	Image        string      `json:"image"`
+	SwipeAreas   []SwipeArea `json:"swipe_areas"`
+	Instructions string      `json:"instructions"`
+	CanvasWidth  int         `json:"canvas_width"`
+	CanvasHeight int         `json:"canvas_height"`
 }
 
 // SwipeArea represents a swipeable area
 type SwipeArea struct {
-	ID       string  `json:"id"`
-	X        int     `json:"x"`
-	Y        int     `json:"y"`
-	Width    int     `json:"width"`
-	Height   int     `json:"height"`
+	ID        string `json:"id"`
+	X         int    `json:"x"`
+	Y         int    `json:"y"`
+	Width     int    `json:"width"`
+	Height    int    `json:"height"`
 	Direction string `json:"direction"` // "left", "right", "up", "down"
-	Required bool    `json:"required"`
-	Text     string  `json:"text,omitempty"`
+	Required  bool   `json:"required"`
+	Text      string `json:"text,omitempty"`
 }
 
 // SwipeGenerator generates swipe-based captchas
 type SwipeGenerator struct {
-	canvasWidth     int
-	canvasHeight    int
-	minSwipes       int
-	maxSwipes       int
-	swipeThreshold  int
+	canvasWidth    int
+	canvasHeight   int
+	minSwipes      int
+	maxSwipes      int
+	swipeThreshold int
 }
 
 // NewSwipeGenerator creates a new swipe generator
@@ -53,23 +53,23 @@ func NewSwipeGenerator(canvasWidth, canvasHeight, minSwipes, maxSwipes, swipeThr
 func (g *SwipeGenerator) Generate(complexity int32) (*SwipeCaptcha, interface{}, error) {
 	// Determine number of swipes based on complexity
 	numSwipes := g.calculateSwipeCount(complexity)
-	
+
 	// Generate swipe areas
 	swipeAreas, correctSequence := g.generateSwipeAreas(numSwipes)
-	
+
 	// Generate image data
 	imageData := g.generateImage(swipeAreas)
-	
+
 	// Create captcha
 	captcha := &SwipeCaptcha{
-		ID:          fmt.Sprintf("swipe_%d", time.Now().UnixNano()),
-		Image:       imageData,
-		SwipeAreas:  swipeAreas,
+		ID:           fmt.Sprintf("swipe_%d", time.Now().UnixNano()),
+		Image:        imageData,
+		SwipeAreas:   swipeAreas,
 		Instructions: g.generateInstructions(complexity),
-		CanvasWidth: g.canvasWidth,
+		CanvasWidth:  g.canvasWidth,
 		CanvasHeight: g.canvasHeight,
 	}
-	
+
 	return captcha, correctSequence, nil
 }
 
@@ -80,7 +80,7 @@ func (g *SwipeGenerator) GenerateHTML(captcha *SwipeCaptcha) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal captcha: %w", err)
 	}
-	
+
 	html := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -392,7 +392,7 @@ func (g *SwipeGenerator) GenerateHTML(captcha *SwipeCaptcha) (string, error) {
                 progress.style.color = '#28a745';
                 submitBtn.disabled = false;
             } else {
-                progress.textContent = `Completed ${completedRequired.length} of ${requiredAreas.length} required swipes`;
+                progress.textContent = 'Completed ' + completedRequired.length + ' of ' + requiredAreas.length + ' required swipes';
                 progress.style.color = '#666';
                 submitBtn.disabled = true;
             }
@@ -414,10 +414,10 @@ func (g *SwipeGenerator) GenerateHTML(captcha *SwipeCaptcha) (string, error) {
         document.addEventListener('DOMContentLoaded', initCaptcha);
     </script>
 </body>
-</html>`, 
+</html>`,
 		g.canvasWidth, g.canvasWidth, g.canvasHeight, captcha.Instructions, string(captchaJSON),
 		g.canvasWidth, g.canvasHeight, g.swipeThreshold)
-	
+
 	return html, nil
 }
 
@@ -426,7 +426,7 @@ func (g *SwipeGenerator) calculateSwipeCount(complexity int32) int {
 	// More complexity = more swipes required
 	baseCount := g.minSwipes
 	maxCount := g.maxSwipes
-	
+
 	if complexity < 30 {
 		return baseCount
 	} else if complexity < 60 {
@@ -441,40 +441,40 @@ func (g *SwipeGenerator) calculateSwipeCount(complexity int32) int {
 // generateSwipeAreas generates swipe areas for the captcha
 func (g *SwipeGenerator) generateSwipeAreas(numSwipes int) ([]SwipeArea, []map[string]interface{}) {
 	rand.Seed(time.Now().UnixNano())
-	
+
 	swipeAreas := make([]SwipeArea, numSwipes)
 	correctSequence := make([]map[string]interface{}, 0, numSwipes)
-	
+
 	directions := []string{"left", "right", "up", "down"}
-	
+
 	for i := 0; i < numSwipes; i++ {
 		// Generate random position
 		x := rand.Intn(g.canvasWidth - 100)
 		y := rand.Intn(g.canvasHeight - 100)
-		
+
 		// Ensure areas don't overlap
 		g.avoidOverlap(x, y, swipeAreas[:i])
-		
+
 		direction := directions[rand.Intn(len(directions))]
-		
+
 		area := SwipeArea{
-			ID:       fmt.Sprintf("area_%d", i),
-			X:        x,
-			Y:        y,
-			Width:    80,
-			Height:   80,
+			ID:        fmt.Sprintf("area_%d", i),
+			X:         x,
+			Y:         y,
+			Width:     80,
+			Height:    80,
 			Direction: direction,
-			Required: true,
-			Text:     fmt.Sprintf("Swipe %s", direction),
+			Required:  true,
+			Text:      fmt.Sprintf("Swipe %s", direction),
 		}
-		
+
 		swipeAreas[i] = area
 		correctSequence = append(correctSequence, map[string]interface{}{
-			"areaId":   area.ID,
+			"areaId":    area.ID,
 			"direction": direction,
 		})
 	}
-	
+
 	return swipeAreas, correctSequence
 }
 
@@ -482,25 +482,25 @@ func (g *SwipeGenerator) generateSwipeAreas(numSwipes int) ([]SwipeArea, []map[s
 func (g *SwipeGenerator) avoidOverlap(x, y int, existingAreas []SwipeArea) {
 	maxAttempts := 50
 	attempts := 0
-	
+
 	for attempts < maxAttempts {
 		overlaps := false
-		
+
 		for _, existing := range existingAreas {
 			if g.checkOverlap(x, y, 80, 80, existing.X, existing.Y, existing.Width, existing.Height) {
 				overlaps = true
 				break
 			}
 		}
-		
+
 		if !overlaps {
 			break
 		}
-		
+
 		// Reposition
 		x = rand.Intn(g.canvasWidth - 100)
 		y = rand.Intn(g.canvasHeight - 100)
-		
+
 		attempts++
 	}
 }
@@ -524,6 +524,6 @@ func (g *SwipeGenerator) generateInstructions(complexity int32) string {
 		"Move each item in the direction indicated",
 		"Swipe the highlighted areas according to their arrows",
 	}
-	
+
 	return instructions[rand.Intn(len(instructions))]
 }

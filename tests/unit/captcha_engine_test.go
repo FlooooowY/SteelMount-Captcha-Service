@@ -8,12 +8,7 @@ import (
 )
 
 func TestEngine_GenerateChallenge(t *testing.T) {
-	engine := captcha.NewEngine()
-
-	// Register captcha types
-	engine.RegisterCaptcha("drag_drop", captcha.NewDragDropGenerator(400, 300, 3, 8))
-	engine.RegisterCaptcha("click", captcha.NewClickGenerator(400, 300, 2, 5))
-	engine.RegisterCaptcha("swipe", captcha.NewSwipeGenerator(400, 300, 1, 3))
+	engine := captcha.NewEngine(400, 300)
 
 	tests := []struct {
 		name        string
@@ -63,7 +58,7 @@ func TestEngine_GenerateChallenge(t *testing.T) {
 				return
 			}
 
-			if challenge == nil {
+			if challenge == "" {
 				t.Errorf("Expected challenge but got nil")
 			}
 
@@ -75,8 +70,7 @@ func TestEngine_GenerateChallenge(t *testing.T) {
 }
 
 func TestEngine_Performance(t *testing.T) {
-	engine := captcha.NewEngine()
-	engine.RegisterCaptcha("drag_drop", captcha.NewDragDropGenerator(400, 300, 3, 8))
+	engine := captcha.NewEngine(400, 300)
 
 	// Test RPS performance
 	start := time.Now()
@@ -101,8 +95,7 @@ func TestEngine_Performance(t *testing.T) {
 }
 
 func TestEngine_ConcurrentGeneration(t *testing.T) {
-	engine := captcha.NewEngine()
-	engine.RegisterCaptcha("drag_drop", captcha.NewDragDropGenerator(400, 300, 3, 8))
+	engine := captcha.NewEngine(400, 300)
 
 	// Test concurrent generation
 	concurrency := 10
@@ -129,8 +122,7 @@ func TestEngine_ConcurrentGeneration(t *testing.T) {
 }
 
 func TestEngine_MemoryUsage(t *testing.T) {
-	engine := captcha.NewEngine()
-	engine.RegisterCaptcha("drag_drop", captcha.NewDragDropGenerator(400, 300, 3, 8))
+	engine := captcha.NewEngine(400, 300)
 
 	// Generate many challenges and check memory doesn't grow excessively
 	iterations := 1000

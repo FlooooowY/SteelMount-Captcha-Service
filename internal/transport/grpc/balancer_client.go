@@ -5,21 +5,23 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/logger"
-	pb "github.com/FlooooowY/SteelMount-Captcha-Service/pb/proto/balancer/v1"
+	pb "github.com/FlooooowY/SteelMount-Captcha-Service/proto/balancer/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 // BalancerClient handles communication with the balancer
 type BalancerClient struct {
-	client     pb.BalancerServiceClient
-	conn       *grpc.ClientConn
-	instanceID string
-	host       string
-	port       int
+	client        pb.BalancerServiceClient
+	conn          *grpc.ClientConn
+	instanceID    string
+	host          string
+	port          int
 	challengeType string
-	logger     *logger.Logger
+	logger        *logrus.Logger
 }
 
 // NewBalancerClient creates a new balancer client
@@ -34,13 +36,13 @@ func NewBalancerClient(balancerURL, instanceID, host, challengeType string, port
 	log := logger.GetLogger()
 
 	return &BalancerClient{
-		client:       client,
-		conn:         conn,
-		instanceID:   instanceID,
-		host:         host,
-		port:         port,
+		client:        client,
+		conn:          conn,
+		instanceID:    instanceID,
+		host:          host,
+		port:          port,
 		challengeType: challengeType,
-		logger:       log,
+		logger:        log,
 	}, nil
 }
 
@@ -91,12 +93,12 @@ func (c *BalancerClient) Close() error {
 // sendRegistration sends a registration request
 func (c *BalancerClient) sendRegistration(stream pb.BalancerService_RegisterInstanceClient, eventType pb.RegisterInstanceRequest_EventType) error {
 	req := &pb.RegisterInstanceRequest{
-		EventType:   eventType,
-		InstanceId:  c.instanceID,
+		EventType:     eventType,
+		InstanceId:    c.instanceID,
 		ChallengeType: c.challengeType,
-		Host:        c.host,
-		PortNumber:  int32(c.port),
-		Timestamp:   time.Now().Unix(),
+		Host:          c.host,
+		PortNumber:    int32(c.port),
+		Timestamp:     time.Now().Unix(),
 	}
 
 	return stream.Send(req)

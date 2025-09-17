@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"strings"
 
@@ -31,17 +30,17 @@ func (sm *SecurityMiddleware) UnaryInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		// Extract client information
 		ip, userAgent := sm.extractClientInfo(ctx)
-		
+
 		// Perform security checks
 		result, err := sm.securityService.CheckRequest(ctx, ip, userAgent, info.FullMethod, 0, false)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "security check failed: %v", err)
 		}
-		
+
 		if !result.Allowed {
 			return nil, status.Errorf(codes.PermissionDenied, "request blocked: %s", strings.Join(result.Reasons, ", "))
 		}
-		
+
 		// Call the actual handler
 		return handler(ctx, req)
 	}
@@ -52,17 +51,17 @@ func (sm *SecurityMiddleware) StreamInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		// Extract client information
 		ip, userAgent := sm.extractClientInfo(ss.Context())
-		
+
 		// Perform security checks
 		result, err := sm.securityService.CheckRequest(ss.Context(), ip, userAgent, info.FullMethod, 0, false)
 		if err != nil {
 			return status.Errorf(codes.Internal, "security check failed: %v", err)
 		}
-		
+
 		if !result.Allowed {
 			return status.Errorf(codes.PermissionDenied, "request blocked: %s", strings.Join(result.Reasons, ", "))
 		}
-		
+
 		// Call the actual handler
 		return handler(srv, ss)
 	}
@@ -77,7 +76,7 @@ func (sm *SecurityMiddleware) extractClientInfo(ctx context.Context) (string, st
 			ip = tcpAddr.IP.String()
 		}
 	}
-	
+
 	// Extract user agent from metadata
 	userAgent := "grpc-client" // Default fallback
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
@@ -85,7 +84,7 @@ func (sm *SecurityMiddleware) extractClientInfo(ctx context.Context) (string, st
 			userAgent = ua[0]
 		}
 	}
-	
+
 	return ip, userAgent
 }
 

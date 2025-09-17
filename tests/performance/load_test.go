@@ -14,10 +14,7 @@ import (
 
 // TestCaptchaGenerationRPS tests captcha generation performance
 func TestCaptchaGenerationRPS(t *testing.T) {
-	engine := captcha.NewEngine()
-	engine.RegisterCaptcha("drag_drop", captcha.NewDragDropGenerator(400, 300, 3, 8))
-	engine.RegisterCaptcha("click", captcha.NewClickGenerator(400, 300, 2, 5))
-	engine.RegisterCaptcha("swipe", captcha.NewSwipeGenerator(400, 300, 1, 3))
+	engine := captcha.NewEngine(400, 300)
 
 	testCases := []struct {
 		name        string
@@ -71,8 +68,7 @@ func TestCaptchaGenerationRPS(t *testing.T) {
 
 // TestConcurrentCaptchaGeneration tests concurrent captcha generation
 func TestConcurrentCaptchaGeneration(t *testing.T) {
-	engine := captcha.NewEngine()
-	engine.RegisterCaptcha("drag_drop", captcha.NewDragDropGenerator(400, 300, 3, 8))
+	engine := captcha.NewEngine(400, 300)
 
 	concurrency := 50
 	iterationsPerGoroutine := 20
@@ -120,8 +116,7 @@ func TestConcurrentCaptchaGeneration(t *testing.T) {
 
 // TestMemoryUsage tests memory usage during high load
 func TestMemoryUsage(t *testing.T) {
-	engine := captcha.NewEngine()
-	engine.RegisterCaptcha("drag_drop", captcha.NewDragDropGenerator(400, 300, 3, 8))
+	engine := captcha.NewEngine(400, 300)
 
 	// Measure initial memory
 	var m1 runtime.MemStats

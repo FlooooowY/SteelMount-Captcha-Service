@@ -16,6 +16,63 @@
 
 **Поддержка нескольких клиентов одновременно и корректное завершение работы сервера.**
 
+## Интеграция с системой
+
+### Подключение к балансеру
+
+Сервис автоматически регистрируется в балансере при запуске:
+
+1. **Поиск свободного порта**: сервис ищет первый доступный порт в диапазоне 38000-40000
+2. **Регистрация в балансере**: отправляет gRPC запрос с информацией о себе
+3. **Поддержание соединения**: каждую секунду отправляет heartbeat для подтверждения готовности
+4. **Graceful shutdown**: при остановке отправляет событие STOPPED
+
+### Работа с клиентами
+
+**Создание капчи**:
+
+```bash
+# gRPC вызов
+NewChallenge(ChallengeRequest) -> ChallengeResponse
+```
+
+**Обработка событий**:
+
+```bash
+# gRPC стрим
+MakeEventStream(stream ClientEvent) -> stream ServerEvent
+```
+
+**WebSocket интеграция**:
+
+```javascript
+// Отправка данных из капчи
+window.top.postMessage({
+	type: 'captcha:sendData',
+	data: binaryData,
+})
+
+// Получение данных от сервера
+window.addEventListener('message', e => {
+	if (e.data?.type === 'captcha:serverData') {
+		// Обработка данных
+	}
+})
+```
+
+### Протоколы
+
+**BalancerService** (порт балансера):
+
+- `RegisterInstance` - регистрация инстанса капчи
+- Heartbeat каждую секунду с событием READY/NOT_READY
+- Событие STOPPED при завершении работы
+
+**CaptchaService** (порт 38000-40000):
+
+- `NewChallenge` - создание новой капчи
+- `MakeEventStream` - поток событий WebSocket
+
 ## Сборка:
 
 ```bash
@@ -88,3 +145,13 @@ go test ./...
 
 - `GET /metrics` – метрики Prometheus
 - `GET /health` – информация о статусе сервиса
+- `GET /security/stats` – статистика безопасности
+
+## Конфигурация
+
+Переменные окружения:
+
+- `MIN_PORT` / `MAX_PORT` - диапазон портов (по умолчанию 38000-40000)
+- `REDIS_URL` - URL Redis сервера
+- `LOG_LEVEL` - уровень логирования
+- `MAX_SHUTDOWN_INTERVAL` - время graceful shutdown (по умолчанию 600 сек)

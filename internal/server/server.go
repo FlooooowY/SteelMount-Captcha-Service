@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/config"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/logger"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/monitoring"
@@ -14,16 +16,17 @@ import (
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/security"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/transport/grpc"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/websocket"
-	"google.golang.org/grpc"
+	redisLib "github.com/go-redis/redis/v8"
+	grpcLib "google.golang.org/grpc"
 )
 
 // Server represents the captcha service server
 type Server struct {
 	config *config.Config
-	logger *logger.Logger
+	logger *logrus.Logger
 
 	// gRPC server
-	grpcServer *grpc.Server
+	grpcServer *grpcLib.Server
 	listener   net.Listener
 
 	// WebSocket server
@@ -36,15 +39,15 @@ type Server struct {
 	securityMW      *grpc.SecurityMiddleware
 
 	// Monitoring
-	metrics         *monitoring.Metrics
-	metricsMW       *monitoring.MetricsMiddleware
+	metrics          *monitoring.Metrics
+	metricsMW        *monitoring.MetricsMiddleware
 	prometheusServer *monitoring.PrometheusServer
 
 	// Server state
-	port       int
-	wsPort     int
+	port        int
+	wsPort      int
 	metricsPort int
-	instanceID string
+	instanceID  string
 
 	// Graceful shutdown
 	shutdownWG sync.WaitGroup
@@ -119,12 +122,12 @@ func New(cfg *config.Config) (*Server, error) {
 			CleanupInterval: time.Hour,
 		},
 	}
-	
-	var redisClientForSecurity *redis.Client
+
+	var redisClientForSecurity *redisLib.Client
 	if redisClient != nil {
 		redisClientForSecurity = redisClient.GetClient()
 	}
-	
+
 	srv.securityService = security.NewSecurityService(redisClientForSecurity, securityConfig)
 
 	// Create security middleware
@@ -142,17 +145,17 @@ func New(cfg *config.Config) (*Server, error) {
 	srv.wsServer = websocket.NewHTTPServer(srv.wsService, srv.wsPort)
 
 	// Create gRPC server with security and metrics middleware
-	srv.grpcServer = grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
+	srv.grpcServer = grpcLib.NewServer(
+		grpcLib.ChainUnaryInterceptor(
 			srv.securityMW.UnaryInterceptor(),
 			srv.metricsMW.GRPCMetricsInterceptor(),
 		),
-		grpc.ChainStreamInterceptor(
+		grpcLib.ChainStreamInterceptor(
 			srv.securityMW.StreamInterceptor(),
 			// Add stream metrics interceptor here if needed
 		),
-		grpc.MaxRecvMsgSize(4*1024*1024), // 4MB
-		grpc.MaxSendMsgSize(4*1024*1024), // 4MB
+		grpcLib.MaxRecvMsgSize(4*1024*1024), // 4MB
+		grpcLib.MaxSendMsgSize(4*1024*1024), // 4MB
 	)
 
 	// Register services
@@ -334,11 +337,11 @@ func (s *Server) GetSecurityService() *security.SecurityService {
 // GetSecurityStats returns security statistics
 func (s *Server) GetSecurityStats() map[string]interface{} {
 	stats := s.securityService.GetStats()
-	
+
 	if s.redisClient != nil {
 		stats["redis"] = s.redisClient.GetStats()
 	}
-	
+
 	return stats
 }
 

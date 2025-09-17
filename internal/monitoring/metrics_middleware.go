@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 )
 
@@ -25,21 +24,21 @@ func NewMetricsMiddleware(metrics *Metrics) *MetricsMiddleware {
 func (mm *MetricsMiddleware) HTTPMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		
+
 		// Increment requests in flight
 		mm.metrics.RequestsInFlight.Inc()
 		defer mm.metrics.RequestsInFlight.Dec()
-		
+
 		// Wrap response writer to capture status code
 		wrapped := &responseWriter{ResponseWriter: w, statusCode: 200}
-		
+
 		// Call next handler
 		next.ServeHTTP(wrapped, r)
-		
+
 		// Record metrics
 		duration := time.Since(start)
 		status := http.StatusText(wrapped.statusCode)
-		
+
 		mm.metrics.RecordRequest(r.Method, r.URL.Path, status, duration)
 		mm.metrics.RecordResponseTime(r.URL.Path, duration)
 	})
@@ -49,24 +48,24 @@ func (mm *MetricsMiddleware) HTTPMiddleware(next http.Handler) http.Handler {
 func (mm *MetricsMiddleware) GRPCMetricsInterceptor() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		start := time.Now()
-		
+
 		// Increment requests in flight
 		mm.metrics.RequestsInFlight.Inc()
 		defer mm.metrics.RequestsInFlight.Dec()
-		
+
 		// Call handler
 		resp, err := handler(ctx, req)
-		
+
 		// Record metrics
 		duration := time.Since(start)
 		status := "success"
 		if err != nil {
 			status = "error"
 		}
-		
+
 		mm.metrics.RecordRequest("grpc", info.FullMethod, status, duration)
 		mm.metrics.RecordResponseTime(info.FullMethod, duration)
-		
+
 		return resp, err
 	}
 }
@@ -76,14 +75,14 @@ func (mm *MetricsMiddleware) WebSocketMetricsInterceptor() func(next http.Handle
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			
+
 			// Increment WebSocket connections
 			mm.metrics.WebSocketConnections.Inc()
 			defer mm.metrics.WebSocketConnections.Dec()
-			
+
 			// Call next handler
 			next.ServeHTTP(w, r)
-			
+
 			// Record WebSocket connection duration
 			duration := time.Since(start)
 			mm.metrics.RecordResponseTime("websocket", duration)

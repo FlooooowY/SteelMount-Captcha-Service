@@ -21,7 +21,7 @@ type Engine struct {
 // NewEngine creates a new captcha engine
 func NewEngine(canvasWidth, canvasHeight int) *Engine {
 	return &Engine{
-		dragDropGenerator: NewDragDropGenerator(canvasWidth, canvasHeight, 3, 8, 50),
+		dragDropGenerator: NewDragDropGenerator(canvasWidth, canvasHeight, 3, 8),
 		clickGenerator:    NewClickGenerator(canvasWidth, canvasHeight, 2, 5, 20),
 		swipeGenerator:    NewSwipeGenerator(canvasWidth, canvasHeight, 1, 3, 50),
 	}

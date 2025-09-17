@@ -7,7 +7,7 @@ import (
 
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/domain"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/usecase"
-	pb "github.com/FlooooowY/SteelMount-Captcha-Service/pb/proto/captcha/v1"
+	pb "github.com/FlooooowY/SteelMount-Captcha-Service/proto/captcha/v1"
 )
 
 // CaptchaService implements the gRPC captcha service
@@ -92,7 +92,7 @@ func (s *CaptchaService) sendServerEvent(stream pb.CaptchaService_MakeEventStrea
 	case domain.ServerEventTypeChallengeResult:
 		serverEvent.Event = &pb.ServerEvent_Result{
 			Result: &pb.ServerEvent_ChallengeResult{
-				ChallengeId:      event.ChallengeID,
+				ChallengeId:       event.ChallengeID,
 				ConfidencePercent: 100, // TODO: Get from event data
 			},
 		}

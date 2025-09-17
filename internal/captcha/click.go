@@ -10,23 +10,23 @@ import (
 
 // ClickCaptcha represents a click-based captcha
 type ClickCaptcha struct {
-	ID          string      `json:"id"`
-	Image       string      `json:"image"`
-	ClickAreas  []ClickArea `json:"click_areas"`
-	Instructions string     `json:"instructions"`
-	CanvasWidth int        `json:"canvas_width"`
-	CanvasHeight int       `json:"canvas_height"`
+	ID           string      `json:"id"`
+	Image        string      `json:"image"`
+	ClickAreas   []ClickArea `json:"click_areas"`
+	Instructions string      `json:"instructions"`
+	CanvasWidth  int         `json:"canvas_width"`
+	CanvasHeight int         `json:"canvas_height"`
 }
 
 // ClickArea represents a clickable area
 type ClickArea struct {
-	ID       string  `json:"id"`
-	X        int     `json:"x"`
-	Y        int     `json:"y"`
-	Width    int     `json:"width"`
-	Height   int     `json:"height"`
-	Required bool    `json:"required"`
-	Text     string  `json:"text,omitempty"`
+	ID       string `json:"id"`
+	X        int    `json:"x"`
+	Y        int    `json:"y"`
+	Width    int    `json:"width"`
+	Height   int    `json:"height"`
+	Required bool   `json:"required"`
+	Text     string `json:"text,omitempty"`
 }
 
 // ClickGenerator generates click-based captchas
@@ -53,23 +53,23 @@ func NewClickGenerator(canvasWidth, canvasHeight, minClicks, maxClicks, clickRad
 func (g *ClickGenerator) Generate(complexity int32) (*ClickCaptcha, interface{}, error) {
 	// Determine number of clicks based on complexity
 	numClicks := g.calculateClickCount(complexity)
-	
+
 	// Generate click areas
 	clickAreas, correctSequence := g.generateClickAreas(numClicks)
-	
+
 	// Generate image data (base64 encoded simple shapes)
 	imageData := g.generateImage(clickAreas)
-	
+
 	// Create captcha
 	captcha := &ClickCaptcha{
-		ID:          fmt.Sprintf("click_%d", time.Now().UnixNano()),
-		Image:       imageData,
-		ClickAreas:  clickAreas,
+		ID:           fmt.Sprintf("click_%d", time.Now().UnixNano()),
+		Image:        imageData,
+		ClickAreas:   clickAreas,
 		Instructions: g.generateInstructions(complexity),
-		CanvasWidth: g.canvasWidth,
+		CanvasWidth:  g.canvasWidth,
 		CanvasHeight: g.canvasHeight,
 	}
-	
+
 	return captcha, correctSequence, nil
 }
 
@@ -80,7 +80,7 @@ func (g *ClickGenerator) GenerateHTML(captcha *ClickCaptcha) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal captcha: %w", err)
 	}
-	
+
 	html := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
@@ -252,7 +252,7 @@ func (g *ClickGenerator) GenerateHTML(captcha *ClickCaptcha) (string, error) {
                 progress.style.color = '#28a745';
                 submitBtn.disabled = false;
             } else {
-                progress.textContent = `Clicked ${clickedRequired.length} of ${requiredAreas.length} required areas`;
+                progress.textContent = 'Clicked ' + clickedRequired.length + ' of ' + requiredAreas.length + ' required areas';
                 progress.style.color = '#666';
                 submitBtn.disabled = true;
             }
@@ -274,10 +274,10 @@ func (g *ClickGenerator) GenerateHTML(captcha *ClickCaptcha) (string, error) {
         document.addEventListener('DOMContentLoaded', initCaptcha);
     </script>
 </body>
-</html>`, 
+</html>`,
 		g.canvasWidth, g.canvasWidth, g.canvasHeight, captcha.Instructions, string(captchaJSON),
 		g.clickRadius, g.clickRadius, g.clickRadius, g.clickRadius, g.clickRadius, g.clickRadius, g.clickRadius)
-	
+
 	return html, nil
 }
 
@@ -286,7 +286,7 @@ func (g *ClickGenerator) calculateClickCount(complexity int32) int {
 	// More complexity = more clicks required
 	baseCount := g.minClicks
 	maxCount := g.maxClicks
-	
+
 	if complexity < 30 {
 		return baseCount
 	} else if complexity < 60 {
@@ -301,18 +301,18 @@ func (g *ClickGenerator) calculateClickCount(complexity int32) int {
 // generateClickAreas generates click areas for the captcha
 func (g *ClickGenerator) generateClickAreas(numClicks int) ([]ClickArea, []string) {
 	rand.Seed(time.Now().UnixNano())
-	
+
 	clickAreas := make([]ClickArea, numClicks)
 	correctSequence := make([]string, 0, numClicks)
-	
+
 	for i := 0; i < numClicks; i++ {
 		// Generate random position
-		x := g.clickRadius + rand.Intn(g.canvasWidth - 2*g.clickRadius)
-		y := g.clickRadius + rand.Intn(g.canvasHeight - 2*g.clickRadius)
-		
+		x := g.clickRadius + rand.Intn(g.canvasWidth-2*g.clickRadius)
+		y := g.clickRadius + rand.Intn(g.canvasHeight-2*g.clickRadius)
+
 		// Ensure areas don't overlap
 		g.avoidOverlap(x, y, clickAreas[:i])
-		
+
 		area := ClickArea{
 			ID:       fmt.Sprintf("area_%d", i),
 			X:        x,
@@ -322,11 +322,11 @@ func (g *ClickGenerator) generateClickAreas(numClicks int) ([]ClickArea, []strin
 			Required: true, // All areas are required for now
 			Text:     fmt.Sprintf("%d", i+1),
 		}
-		
+
 		clickAreas[i] = area
 		correctSequence = append(correctSequence, area.ID)
 	}
-	
+
 	return clickAreas, correctSequence
 }
 
@@ -334,26 +334,26 @@ func (g *ClickGenerator) generateClickAreas(numClicks int) ([]ClickArea, []strin
 func (g *ClickGenerator) avoidOverlap(x, y int, existingAreas []ClickArea) {
 	maxAttempts := 50
 	attempts := 0
-	
+
 	for attempts < maxAttempts {
 		overlaps := false
-		
+
 		for _, existing := range existingAreas {
 			distance := g.calculateDistance(x, y, existing.X, existing.Y)
-			if distance < g.clickRadius*2 {
+			if distance < float64(g.clickRadius*2) {
 				overlaps = true
 				break
 			}
 		}
-		
+
 		if !overlaps {
 			break
 		}
-		
+
 		// Reposition
-		x = g.clickRadius + rand.Intn(g.canvasWidth - 2*g.clickRadius)
-		y = g.clickRadius + rand.Intn(g.canvasHeight - 2*g.clickRadius)
-		
+		x = g.clickRadius + rand.Intn(g.canvasWidth-2*g.clickRadius)
+		y = g.clickRadius + rand.Intn(g.canvasHeight-2*g.clickRadius)
+
 		attempts++
 	}
 }
@@ -376,17 +376,17 @@ func (g *ClickGenerator) generateImage(clickAreas []ClickArea) string {
 func (g *ClickGenerator) generateSVG(clickAreas []ClickArea) string {
 	// Simple SVG with circles and rectangles
 	svg := fmt.Sprintf(`<svg width="%d" height="%d" xmlns="http://www.w3.org/2000/svg">`, g.canvasWidth, g.canvasHeight)
-	
+
 	// Add some background shapes
 	shapes := []string{"circle", "rect", "polygon"}
 	colors := []string{"#e9ecef", "#dee2e6", "#ced4da", "#adb5bd"}
-	
+
 	for i := 0; i < 10; i++ {
 		x := rand.Intn(g.canvasWidth - 50)
 		y := rand.Intn(g.canvasHeight - 50)
 		color := colors[rand.Intn(len(colors))]
 		shape := shapes[rand.Intn(len(shapes))]
-		
+
 		switch shape {
 		case "circle":
 			svg += fmt.Sprintf(`<circle cx="%d" cy="%d" r="20" fill="%s" opacity="0.3"/>`, x+25, y+25, color)
@@ -396,9 +396,9 @@ func (g *ClickGenerator) generateSVG(clickAreas []ClickArea) string {
 			svg += fmt.Sprintf(`<polygon points="%d,%d %d,%d %d,%d" fill="%s" opacity="0.3"/>`, x, y, x+40, y, x+20, y+40, color)
 		}
 	}
-	
+
 	svg += "</svg>"
-	
+
 	// Encode to base64
 	return g.encodeBase64(svg)
 }
@@ -418,6 +418,6 @@ func (g *ClickGenerator) generateInstructions(complexity int32) string {
 		"Select all the required areas by clicking on them",
 		"Click on the marked spots to complete the challenge",
 	}
-	
+
 	return instructions[rand.Intn(len(instructions))]
 }
