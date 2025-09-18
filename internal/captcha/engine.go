@@ -11,6 +11,7 @@ type Engine struct {
 	dragDropGenerator *DragDropGenerator
 	clickGenerator    *ClickGenerator
 	swipeGenerator    *SwipeGenerator
+	gameGenerator     *GameGenerator
 
 	// Performance tracking
 	generationCount int64
@@ -24,6 +25,7 @@ func NewEngine(canvasWidth, canvasHeight int) *Engine {
 		dragDropGenerator: NewDragDropGenerator(canvasWidth, canvasHeight, 3, 8),
 		clickGenerator:    NewClickGenerator(canvasWidth, canvasHeight, 2, 5, 20),
 		swipeGenerator:    NewSwipeGenerator(canvasWidth, canvasHeight, 1, 3, 50),
+		gameGenerator:     NewGameGenerator(canvasWidth, canvasHeight),
 	}
 }
 
@@ -44,6 +46,8 @@ func (e *Engine) GenerateChallenge(challengeType string, complexity int32) (stri
 		return e.generateClick(complexity)
 	case "swipe":
 		return e.generateSwipe(complexity)
+	case "game":
+		return e.generateGame(complexity)
 	default:
 		return "", nil, fmt.Errorf("unknown challenge type: %s", challengeType)
 	}
@@ -89,6 +93,21 @@ func (e *Engine) generateSwipe(complexity int32) (string, interface{}, error) {
 	html, err := e.swipeGenerator.GenerateHTML(captcha)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to generate swipe HTML: %w", err)
+	}
+
+	return html, answer, nil
+}
+
+// generateGame generates a game captcha
+func (e *Engine) generateGame(complexity int32) (string, interface{}, error) {
+	captcha, answer, err := e.gameGenerator.Generate(complexity)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to generate game captcha: %w", err)
+	}
+
+	html, err := e.gameGenerator.GenerateHTML(captcha)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to generate game HTML: %w", err)
 	}
 
 	return html, answer, nil

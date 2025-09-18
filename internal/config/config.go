@@ -125,6 +125,8 @@ type TracingConfig struct {
 
 // BalancerConfig contains balancer-related configuration
 type BalancerConfig struct {
+	URL                  string        `yaml:"url"`
+	Enabled              bool          `yaml:"enabled"`
 	RegistrationInterval time.Duration `yaml:"registration_interval"`
 	HeartbeatTimeout     time.Duration `yaml:"heartbeat_timeout"`
 	MaxRetryAttempts     int           `yaml:"max_retry_attempts"`
@@ -192,6 +194,11 @@ func overrideWithEnv(config *Config) {
 		if port, err := strconv.Atoi(metricsPort); err == nil {
 			config.Monitoring.PrometheusPort = port
 		}
+	}
+
+	// Balancer configuration
+	if balancerURL := os.Getenv("BALANCER_URL"); balancerURL != "" {
+		config.Balancer.URL = balancerURL
 	}
 }
 

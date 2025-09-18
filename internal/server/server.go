@@ -47,6 +47,9 @@ type Server struct {
 	metricsMW        *monitoring.MetricsMiddleware
 	prometheusServer *monitoring.PrometheusServer
 
+	// Balancer integration
+	balancerClient *grpc.BalancerClient
+
 	// Server state
 	port        int
 	wsPort      int
@@ -163,6 +166,23 @@ func New(cfg *config.Config) (*Server, error) {
 		grpcLib.MaxSendMsgSize(4*1024*1024), // 4MB
 	)
 
+	// Create balancer client if enabled
+	if cfg.Balancer.Enabled && cfg.Balancer.URL != "" {
+		balancerClient, err := grpc.NewBalancerClient(
+			cfg.Balancer.URL,
+			instanceID,
+			"localhost", // host
+			"interactive", // challenge type
+			port,
+		)
+		if err != nil {
+			log.Warnf("Failed to create balancer client: %v, running without balancer", err)
+			srv.balancerClient = nil
+		} else {
+			srv.balancerClient = balancerClient
+		}
+	}
+
 	// Register services
 	srv.registerServices()
 
@@ -266,6 +286,16 @@ func (s *Server) Stop(ctx context.Context) error {
 		}
 		close(prometheusDone)
 	}()
+
+	// Stop balancer registration
+	if s.balancerClient != nil {
+		if err := s.balancerClient.StopRegistration(ctx); err != nil {
+			s.logger.Errorf("Error stopping balancer registration: %v", err)
+		}
+		if err := s.balancerClient.Close(); err != nil {
+			s.logger.Errorf("Error closing balancer client: %v", err)
+		}
+	}
 
 	// Close Redis client
 	if s.redisClient != nil {
@@ -403,19 +433,30 @@ func (s *Server) registerServices() {
 
 // startBalancerRegistration starts the balancer registration process
 func (s *Server) startBalancerRegistration(ctx context.Context) {
-	ticker := time.NewTicker(s.config.Balancer.RegistrationInterval)
-	defer ticker.Stop()
+	if s.balancerClient == nil {
+		s.logger.Info("Balancer client not configured, skipping registration")
+		return
+	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			s.logger.Info("Balancer registration stopped")
-			return
-		case <-s.shutdownCh:
-			s.logger.Info("Balancer registration stopped due to shutdown")
-			return
-		case <-ticker.C:
-			s.logger.Debug("Sending heartbeat to balancer")
+	s.logger.Info("Starting balancer registration")
+	
+	// Start registration with retries
+	for attempt := 1; attempt <= s.config.Balancer.MaxRetryAttempts; attempt++ {
+		if err := s.balancerClient.StartRegistration(ctx); err != nil {
+			s.logger.Errorf("Failed to register with balancer (attempt %d/%d): %v", 
+				attempt, s.config.Balancer.MaxRetryAttempts, err)
+			
+			if attempt < s.config.Balancer.MaxRetryAttempts {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(s.config.Balancer.RetryDelay):
+					continue
+				}
+			}
+		} else {
+			s.logger.Info("Successfully registered with balancer")
+			break
 		}
 	}
 }

@@ -180,11 +180,12 @@ func (u *captchaUsecase) determineChallengeType(complexity int32) domain.Challen
 		int64(time.Now().Second()*1000)
 	rand.Seed(seed)
 	
-	// Available challenge types (excluding game for now as it's not implemented)
+	// Available challenge types (including game for high complexity)
 	challengeTypes := []domain.ChallengeType{
 		domain.ChallengeTypeClick,
 		domain.ChallengeTypeDragDrop,
 		domain.ChallengeTypeSwipe,
+		domain.ChallengeTypeGame,
 	}
 	
 	// More balanced weights for better distribution
@@ -194,20 +195,23 @@ func (u *captchaUsecase) determineChallengeType(complexity int32) domain.Challen
 	randomFactor := rand.Intn(20) - 10 // -10 to +10
 	
 	if complexity < 30 {
-		// Low complexity - slightly favor click but keep balanced
+		// Low complexity - slightly favor simple types, no games
 		weights[0] = 40 + randomFactor // Click
 		weights[1] = 30 + rand.Intn(20) // Drag&Drop
 		weights[2] = 30 + rand.Intn(20) // Swipe
+		weights[3] = 0 // No games for low complexity
 	} else if complexity < 60 {
-		// Medium complexity - fully balanced with random variations
-		weights[0] = 33 + rand.Intn(15) // Click
-		weights[1] = 33 + rand.Intn(15) // Drag&Drop
-		weights[2] = 34 + rand.Intn(15) // Swipe
-	} else {
-		// High complexity - slightly favor complex types but keep balanced
+		// Medium complexity - balanced with occasional games
 		weights[0] = 30 + rand.Intn(15) // Click
-		weights[1] = 35 + rand.Intn(15) // Drag&Drop
-		weights[2] = 35 + rand.Intn(15) // Swipe
+		weights[1] = 30 + rand.Intn(15) // Drag&Drop
+		weights[2] = 30 + rand.Intn(15) // Swipe
+		weights[3] = 10 + rand.Intn(10) // Some games
+	} else {
+		// High complexity - favor games and complex types
+		weights[0] = 20 + rand.Intn(15) // Click
+		weights[1] = 25 + rand.Intn(15) // Drag&Drop
+		weights[2] = 25 + rand.Intn(15) // Swipe
+		weights[3] = 30 + rand.Intn(20) // More games for high complexity
 	}
 	
 	// Ensure all weights are positive
@@ -356,29 +360,150 @@ func (u *captchaUsecase) validateSwipeGesture(expected, actual map[string]interf
 
 // validateGameAnswer validates a game challenge answer
 func (u *captchaUsecase) validateGameAnswer(expected, actual interface{}) (bool, int32) {
-	// Game validation based on score or completion status
-	expectedScore, ok := expected.(float64)
+	// Expected is a map with validation criteria
+	expectedMap, ok := expected.(map[string]interface{})
 	if !ok {
 		return false, 0
 	}
 
-	actualScore, ok := actual.(float64)
+	// Actual is the game result from client
+	actualMap, ok := actual.(map[string]interface{})
 	if !ok {
 		return false, 0
 	}
 
-	// Consider it correct if actual score is at least 80% of expected
-	threshold := expectedScore * 0.8
-	if actualScore >= threshold {
-		confidence := int32((actualScore / expectedScore) * 100)
-		if confidence > 100 {
-			confidence = 100
+	// Get the game type to determine validation logic
+	gameType, exists := expectedMap["type"]
+	if !exists {
+		return false, 0
+	}
+
+	switch gameType {
+	case "snake_completion":
+		return u.validateSnakeGame(expectedMap, actualMap)
+	case "memory_sequence":
+		return u.validateMemoryGame(expectedMap, actualMap)
+	case "reaction_time":
+		return u.validateReactionGame(expectedMap, actualMap)
+	default:
+		return false, 0
+	}
+}
+
+// validateSnakeGame validates snake game completion
+func (u *captchaUsecase) validateSnakeGame(expected, actual map[string]interface{}) (bool, int32) {
+	targetFood, ok := expected["target_food"].(int)
+	if !ok {
+		return false, 0
+	}
+
+	actualScore, ok := actual["score"].(float64)
+	if !ok {
+		return false, 0
+	}
+
+	success, ok := actual["success"].(bool)
+	if !ok {
+		return false, 0
+	}
+
+	if success && int(actualScore) >= targetFood {
+		return true, 100
+	}
+
+	// Partial credit based on food collected
+	confidence := int32((actualScore / float64(targetFood)) * 80)
+	if confidence > 80 {
+		confidence = 80
+	}
+	return false, confidence
+}
+
+// validateMemoryGame validates memory sequence game
+func (u *captchaUsecase) validateMemoryGame(expected, actual map[string]interface{}) (bool, int32) {
+	expectedSequence, ok := expected["sequence"].([]int)
+	if !ok {
+		return false, 0
+	}
+
+	actualSequence, ok := actual["sequence"].([]interface{})
+	if !ok {
+		return false, 0
+	}
+
+	// Convert actual sequence to []int
+	actualInts := make([]int, len(actualSequence))
+	for i, v := range actualSequence {
+		if intVal, ok := v.(float64); ok {
+			actualInts[i] = int(intVal)
+		} else {
+			return false, 0
+		}
+	}
+
+	if len(expectedSequence) != len(actualInts) {
+		return false, 20
+	}
+
+	correctCount := 0
+	for i, expected := range expectedSequence {
+		if i < len(actualInts) && actualInts[i] == expected {
+			correctCount++
+		}
+	}
+
+	confidence := int32((correctCount * 100) / len(expectedSequence))
+	return correctCount == len(expectedSequence), confidence
+}
+
+// validateReactionGame validates reaction time game
+func (u *captchaUsecase) validateReactionGame(expected, actual map[string]interface{}) (bool, int32) {
+	targetTime, ok := expected["target_time"].(int)
+	if !ok {
+		return false, 0
+	}
+
+	tolerance, ok := expected["tolerance"].(int)
+	if !ok {
+		return false, 0
+	}
+
+	actualTime, ok := actual["reaction_time"].(float64)
+	if !ok {
+		return false, 0
+	}
+
+	// Check if reaction time is within acceptable range
+	diff := int(actualTime) - targetTime
+	if diff < 0 {
+		diff = -diff
+	}
+
+	if diff <= tolerance {
+		// Perfect reaction time
+		confidence := int32(100 - (diff*50)/tolerance)
+		if confidence < 70 {
+			confidence = 70
 		}
 		return true, confidence
 	}
 
-	// Partial credit based on how close they got
-	confidence := int32((actualScore / expectedScore) * 50)
+	// Too far from target, but give some credit if reasonable
+	if int(actualTime) < 150 {
+		// Too fast, likely cheating
+		return false, 0
+	}
+
+	if int(actualTime) > 5000 {
+		// Too slow, likely not paying attention
+		return false, 10
+	}
+
+	// Some credit for reasonable reaction time
+	confidence := int32(50 - (diff*30)/1000)
+	if confidence < 0 {
+		confidence = 0
+	}
 	return false, confidence
 }
 

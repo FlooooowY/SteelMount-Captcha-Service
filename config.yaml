@@ -75,7 +75,9 @@ monitoring:
     jaeger_endpoint: 'http://localhost:14268/api/traces'
 
 balancer:
+  url: 'localhost:50051'  # URL балансера (будет переопределен через env)
   registration_interval: 1s
   heartbeat_timeout: 30s
   max_retry_attempts: 3
   retry_delay: 5s
+  enabled: true

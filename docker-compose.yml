@@ -2,6 +2,25 @@ version: '3.8'
 name: captcha-service
 
 services:
+  balancer:
+    build:
+      context: .
+      dockerfile: Dockerfile.balancer
+    ports:
+      - '50051:50051'
+    environment:
+      - BALANCER_PORT=50051
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'grpc_health_probe', '-addr=localhost:50051']
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    stop_grace_period: 10s
+    mem_limit: 256m
+    cpus: 0.25
+
   redis:
     image: redis:7-alpine
     ports:
@@ -39,7 +58,15 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:9090/health']
+      test:
+        [
+          'CMD',
+          'wget',
+          '--quiet',
+          '--tries=1',
+          '--spider',
+          'http://localhost:9090/health',
+        ]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -65,7 +92,15 @@ services:
       - '--query.max-concurrency=4'
     restart: unless-stopped
     healthcheck:
-      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost:9090/-/healthy']
+      test:
+        [
+          'CMD',
+          'wget',
+          '--quiet',
+          '--tries=1',
+          '--spider',
+          'http://localhost:9090/-/healthy',
+        ]
       interval: 15s
       timeout: 5s
       retries: 2
