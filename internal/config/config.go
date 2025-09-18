@@ -26,6 +26,8 @@ type ServerConfig struct {
 	ShutdownTimeout time.Duration `yaml:"shutdown_timeout"`
 	ReadTimeout     time.Duration `yaml:"read_timeout"`
 	WriteTimeout    time.Duration `yaml:"write_timeout"`
+	StartupTimeout  time.Duration `yaml:"startup_timeout"`
+	InitTimeout     time.Duration `yaml:"init_timeout"`
 }
 
 // RedisConfig contains Redis-related configuration

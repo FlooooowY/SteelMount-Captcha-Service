@@ -48,7 +48,6 @@ logs/
 
 # Configuration files with secrets
 config.local.yaml
-config.prod.yaml
 
 # Database files
 *.db

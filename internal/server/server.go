@@ -79,29 +79,17 @@ func New(cfg *config.Config) (*Server, error) {
 		shutdownCh: make(chan struct{}),
 	}
 
-	// Find available port for gRPC
-	port, err := srv.findAvailablePort()
+	// Find available ports for gRPC, WebSocket, and metrics in one pass
+	ports, err := srv.findAvailablePorts(3)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find available port: %w", err)
+		return nil, fmt.Errorf("failed to find available ports: %w", err)
 	}
-	srv.port = port
+	srv.port = ports[0]
+	srv.wsPort = ports[1] 
+	srv.metricsPort = ports[2]
 
-	// Find available port for WebSocket (start from gRPC port + 1)
-	wsPort, err := srv.findAvailablePortFrom(port + 1)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find available WebSocket port: %w", err)
-	}
-	srv.wsPort = wsPort
-
-	// Find available port for metrics (start from WebSocket port + 1)
-	metricsPort, err := srv.findAvailablePortFrom(wsPort + 1)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find available metrics port: %w", err)
-	}
-	srv.metricsPort = metricsPort
-
-	// Create Redis client
-	redisClient, err := redis.NewClient(&cfg.Redis)
+	// Create Redis client with timeout
+	redisClient, err := srv.createRedisClientWithTimeout(cfg)
 	if err != nil {
 		log.Warnf("Failed to create Redis client: %v, using local-only mode", err)
 		redisClient = nil
@@ -166,15 +154,9 @@ func New(cfg *config.Config) (*Server, error) {
 		grpcLib.MaxSendMsgSize(4*1024*1024), // 4MB
 	)
 
-	// Create balancer client if enabled
+	// Create balancer client if enabled (with timeout)
 	if cfg.Balancer.Enabled && cfg.Balancer.URL != "" {
-		balancerClient, err := grpc.NewBalancerClient(
-			cfg.Balancer.URL,
-			instanceID,
-			"localhost", // host
-			"interactive", // challenge type
-			port,
-		)
+		balancerClient, err := srv.createBalancerClientWithTimeout(cfg, instanceID, srv.port)
 		if err != nil {
 			log.Warnf("Failed to create balancer client: %v, running without balancer", err)
 			srv.balancerClient = nil
@@ -186,7 +168,7 @@ func New(cfg *config.Config) (*Server, error) {
 	// Register services
 	srv.registerServices()
 
-	log.Infof("Server created with instance ID: %s, gRPC port: %d, WebSocket port: %d, metrics port: %d", instanceID, port, wsPort, srv.metricsPort)
+	log.Infof("Server created with instance ID: %s, gRPC port: %d, WebSocket port: %d, metrics port: %d", instanceID, srv.port, srv.wsPort, srv.metricsPort)
 
 	return srv, nil
 }
@@ -484,4 +466,107 @@ func (s *Server) startSecurityCleanup(ctx context.Context) {
 // generateInstanceID generates a unique instance ID
 func generateInstanceID() string {
 	return fmt.Sprintf("captcha-%d", time.Now().UnixNano())
+}
+
+// createRedisClientWithTimeout creates Redis client with connection timeout
+func (s *Server) createRedisClientWithTimeout(cfg *config.Config) (*redis.Client, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.InitTimeout)
+	defer cancel()
+
+	// Create a channel to receive the result
+	resultCh := make(chan struct {
+		client *redis.Client
+		err    error
+	}, 1)
+
+	go func() {
+		client, err := redis.NewClient(&cfg.Redis)
+		resultCh <- struct {
+			client *redis.Client
+			err    error
+		}{client, err}
+	}()
+
+	select {
+	case result := <-resultCh:
+		return result.client, result.err
+	case <-ctx.Done():
+		return nil, fmt.Errorf("redis client creation timeout after %v", cfg.Server.InitTimeout)
+	}
+}
+
+// createBalancerClientWithTimeout creates balancer client with connection timeout
+func (s *Server) createBalancerClientWithTimeout(cfg *config.Config, instanceID string, port int) (*grpc.BalancerClient, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.InitTimeout)
+	defer cancel()
+
+	// Create a channel to receive the result
+	resultCh := make(chan struct {
+		client *grpc.BalancerClient
+		err    error
+	}, 1)
+
+	go func() {
+		client, err := grpc.NewBalancerClient(
+			cfg.Balancer.URL,
+			instanceID,
+			"localhost", // host
+			"interactive", // challenge type
+			port,
+		)
+		resultCh <- struct {
+			client *grpc.BalancerClient
+			err    error
+		}{client, err}
+	}()
+
+	select {
+	case result := <-resultCh:
+		return result.client, result.err
+	case <-ctx.Done():
+		return nil, fmt.Errorf("balancer client creation timeout after %v", cfg.Server.InitTimeout)
+	}
+}
+
+// findAvailablePorts finds multiple consecutive available ports efficiently
+func (s *Server) findAvailablePorts(count int) ([]int, error) {
+	minPort := s.config.Server.MinPort
+	maxPort := s.config.Server.MaxPort
+	
+	for port := minPort; port <= maxPort-count+1; port++ {
+		// Check if we can get 'count' consecutive ports starting from 'port'
+		availablePorts := make([]int, 0, count)
+		allAvailable := true
+		
+		for i := 0; i < count; i++ {
+			currentPort := port + i
+			if currentPort > maxPort {
+				allAvailable = false
+				break
+			}
+			
+			// Quick check if port is available
+			if !s.isPortAvailable(currentPort) {
+				allAvailable = false
+				break
+			}
+			availablePorts = append(availablePorts, currentPort)
+		}
+		
+		if allAvailable && len(availablePorts) == count {
+			return availablePorts, nil
+		}
+	}
+	
+	return nil, fmt.Errorf("could not find %d consecutive available ports in range %d-%d", count, minPort, maxPort)
+}
+
+// isPortAvailable checks if a port is available
+func (s *Server) isPortAvailable(port int) bool {
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return false
+	}
+	listener.Close()
+	return true
 }

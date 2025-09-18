@@ -40,9 +40,12 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Start server in a goroutine
+	// Start server in a goroutine with startup timeout
+	startupCtx, startupCancel := context.WithTimeout(ctx, cfg.Server.StartupTimeout)
+	defer startupCancel()
+	
 	go func() {
-		if err := srv.Start(ctx); err != nil {
+		if err := srv.Start(startupCtx); err != nil {
 			log.Errorf("Server error: %v", err)
 			cancel()
 		}
