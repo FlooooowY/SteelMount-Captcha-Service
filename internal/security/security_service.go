@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/sirupsen/logrus"
 )
 
 // SecurityService provides comprehensive security features
@@ -16,6 +17,7 @@ type SecurityService struct {
 	ipBlocker   *IPBlocker
 	botDetector *BotDetector
 	config      *SecurityConfig
+	logger      *logrus.Logger
 	mu          sync.RWMutex
 	stats       *SecurityStats
 }
@@ -63,11 +65,15 @@ type BotDetectionConfig struct {
 
 // NewSecurityService creates a new security service
 func NewSecurityService(redisClient *redis.Client, config *SecurityConfig) *SecurityService {
+	logger := logrus.New()
+	logger.SetLevel(logrus.InfoLevel)
+	
 	return &SecurityService{
 		rateLimiter: NewRateLimiter(redisClient),
 		ipBlocker:   NewIPBlockerWithConfig(redisClient, config.IPBlockingConfig.MaxFailedAttempts),
 		botDetector: NewBotDetector(),
 		config:      config,
+		logger:      logger,
 		stats: &SecurityStats{
 			StartTime: time.Now(),
 		},
@@ -130,7 +136,9 @@ func (ss *SecurityService) CheckRequest(ctx context.Context, ip string, userAgen
 		result.Reasons = append(result.Reasons, botScore.Reasons...)
 
 		// Record failed attempt
-		ss.ipBlocker.RecordFailedAttempt(ctx, ip, "Bot behavior detected")
+			if err := ss.ipBlocker.RecordFailedAttempt(ctx, ip, "Bot behavior detected"); err != nil {
+				ss.logger.Errorf("Failed to record bot detection: %v", err)
+			}
 
 		ss.mu.Lock()
 		ss.stats.BotDetections++
@@ -143,7 +151,9 @@ func (ss *SecurityService) CheckRequest(ctx context.Context, ip string, userAgen
 
 	// Record failed attempt if there was an error
 	if isError {
-		ss.ipBlocker.RecordFailedAttempt(ctx, ip, "Request error")
+			if err := ss.ipBlocker.RecordFailedAttempt(ctx, ip, "Request error"); err != nil {
+				ss.logger.Errorf("Failed to record request error: %v", err)
+			}
 		
 		// Check if IP was blocked due to failed attempts
 		blocked, blockInfo, err := ss.ipBlocker.IsBlocked(ctx, ip)

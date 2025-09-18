@@ -480,13 +480,14 @@ func (g *DragDropGenerator) calculateObjectCount(complexity int32) int {
 func (g *DragDropGenerator) generateObjectsAndTargets(numObjects int) ([]DragObject, []DropTarget, map[string]string) {
 	// Ultra-random seed for infinite variations
 	// Ultra-enhanced seed for infinite variations
-	seed := time.Now().UnixNano() + 
+	// Generate entropy for randomness (not used with deprecated rand.Seed)
+	_ = time.Now().UnixNano() + 
 		int64(rand.Intn(1000000)) + 
 		int64(numObjects*9973) + 
 		int64(g.canvasWidth*g.canvasHeight) + 
 		int64(time.Now().Nanosecond()) + 
 		int64(os.Getpid()*13)
-	rand.Seed(seed)
+	// rand.Seed is deprecated in Go 1.20+, using default random source
 
 	objects := make([]DragObject, numObjects)
 	targets := make([]DropTarget, numObjects)

@@ -36,6 +36,11 @@ func NewHTTPServer(wsService *WebSocketService, port int) *HTTPServer {
 	}
 }
 
+// GetWebSocketService returns the WebSocket service
+func (s *HTTPServer) GetWebSocketService() *WebSocketService {
+	return s.wsService
+}
+
 // Start starts the HTTP server
 func (s *HTTPServer) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
@@ -168,7 +173,9 @@ func (s *HTTPServer) handleConnection(wsConn *Connection, conn *websocket.Conn) 
 // sendEvent sends an event to the WebSocket connection
 func (s *HTTPServer) sendEvent(conn *websocket.Conn, event *Event) error {
 	// Set write deadline
-	conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	if err := conn.SetWriteDeadline(time.Now().Add(10 * time.Second)); err != nil {
+		log.Printf("Failed to set write deadline: %v", err)
+	}
 	
 	// Marshal event to JSON
 	data, err := json.Marshal(event)
@@ -190,7 +197,9 @@ func (s *HTTPServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"time":   time.Now().Unix(),
 	}
 	
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Failed to encode response: %v", err)
+	}
 }
 
 // handleStats handles stats requests
@@ -199,5 +208,7 @@ func (s *HTTPServer) handleStats(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	
 	stats := s.wsService.GetConnectionStats()
-	json.NewEncoder(w).Encode(stats)
+	if err := json.NewEncoder(w).Encode(stats); err != nil {
+		log.Printf("Failed to encode stats: %v", err)
+	}
 }

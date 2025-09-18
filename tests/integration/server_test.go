@@ -176,8 +176,8 @@ func TestServer_PortDiscovery(t *testing.T) {
 	// Stop both servers
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	srv1.Stop(ctx)
-	srv2.Stop(ctx)
+	_ = srv1.Stop(ctx)
+	_ = srv2.Stop(ctx)
 
 	// Ports should be different
 	if srv1.GetPort() == srv2.GetPort() {

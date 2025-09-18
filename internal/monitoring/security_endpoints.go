@@ -26,7 +26,9 @@ func (se *SecurityEndpoints) SecurityStatsHandler(w http.ResponseWriter, r *http
 	w.WriteHeader(http.StatusOK)
 
 	stats := se.securityService.GetStats()
-	json.NewEncoder(w).Encode(stats)
+	if err := json.NewEncoder(w).Encode(stats); err != nil {
+		http.Error(w, "Failed to encode stats", http.StatusInternalServerError)
+	}
 }
 
 // BlockedIPsHandler handles blocked IPs requests
@@ -35,7 +37,9 @@ func (se *SecurityEndpoints) BlockedIPsHandler(w http.ResponseWriter, r *http.Re
 	w.WriteHeader(http.StatusOK)
 
 	blockedIPs := se.securityService.GetBlockedIPs()
-	json.NewEncoder(w).Encode(blockedIPs)
+	if err := json.NewEncoder(w).Encode(blockedIPs); err != nil {
+		http.Error(w, "Failed to encode blocked IPs", http.StatusInternalServerError)
+	}
 }
 
 // BlockIPHandler handles IP blocking requests
@@ -77,10 +81,12 @@ func (se *SecurityEndpoints) BlockIPHandler(w http.ResponseWriter, r *http.Reque
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status": "success",
 		"message": "IP blocked successfully",
-	})
+	}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 // UnblockIPHandler handles IP unblocking requests
@@ -111,10 +117,12 @@ func (se *SecurityEndpoints) UnblockIPHandler(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
+	if err := json.NewEncoder(w).Encode(map[string]string{
 		"status": "success",
 		"message": "IP unblocked successfully",
-	})
+	}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
 }
 
 // RegisterRoutes registers security monitoring routes

@@ -70,8 +70,8 @@ func TestRateLimiter_Cleanup(t *testing.T) {
 	ctx := context.Background()
 
 	// Create some limits
-	limiter.Allow(ctx, "key1", 5, time.Millisecond*100)
-	limiter.Allow(ctx, "key2", 5, time.Millisecond*100)
+	_, _ = limiter.Allow(ctx, "key1", 5, time.Millisecond*100)
+	_, _ = limiter.Allow(ctx, "key2", 5, time.Millisecond*100)
 
 	// Wait for expiration
 	time.Sleep(time.Millisecond * 150)

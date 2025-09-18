@@ -1,6 +1,7 @@
 package unit
 
 import (
+	"runtime"
 	"testing"
 	"time"
 
@@ -135,8 +136,8 @@ func TestEngine_MemoryUsage(t *testing.T) {
 
 		// Force garbage collection every 100 iterations
 		if i%100 == 0 {
-			// This is a simplified memory test
-			// In a real scenario, you'd use runtime.MemStats
+			// This is a simplified memory test - force garbage collection
+			runtime.GC()
 		}
 	}
 }

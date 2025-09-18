@@ -309,7 +309,7 @@ func (g *ClickGenerator) calculateClickCount(complexity int32) int {
 
 // generateClickAreas generates click areas for the captcha
 func (g *ClickGenerator) generateClickAreas(numClicks int) ([]ClickArea, []string) {
-	rand.Seed(time.Now().UnixNano())
+	// rand.Seed is deprecated in Go 1.20+, using default random source
 
 	clickAreas := make([]ClickArea, numClicks)
 	correctSequence := make([]string, 0, numClicks)

@@ -12,6 +12,7 @@ import (
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/domain"
 	"github.com/FlooooowY/SteelMount-Captcha-Service/internal/repository"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 // CaptchaUsecase defines the interface for captcha business logic
@@ -29,6 +30,7 @@ type captchaUsecase struct {
 	challengeRepo repository.ChallengeRepository
 	config        *Config
 	engine        *captcha.Engine
+	logger        *logrus.Logger
 }
 
 // Config represents the usecase configuration
@@ -40,10 +42,14 @@ type Config struct {
 
 // NewCaptchaUsecase creates a new captcha usecase
 func NewCaptchaUsecase(challengeRepo repository.ChallengeRepository, config *Config) CaptchaUsecase {
+	logger := logrus.New()
+	logger.SetLevel(logrus.InfoLevel)
+
 	return &captchaUsecase{
 		challengeRepo: challengeRepo,
 		config:        config,
 		engine:        captcha.NewEngine(400, 300), // Default canvas size
+		logger:        logger,
 	}
 }
 
@@ -121,7 +127,9 @@ func (u *captchaUsecase) ValidateChallenge(ctx context.Context, challengeID stri
 	// Update challenge if solved
 	if isValid {
 		challenge.Solved = true
-		u.challengeRepo.Update(ctx, challenge)
+		if err := u.challengeRepo.Update(ctx, challenge); err != nil {
+			u.logger.Errorf("Failed to update challenge: %v", err)
+		}
 	}
 
 	return &domain.ChallengeResult{
@@ -172,14 +180,14 @@ func (u *captchaUsecase) GetActiveChallengesCount(ctx context.Context) int {
 // determineChallengeType determines the challenge type randomly with complexity influence
 func (u *captchaUsecase) determineChallengeType(complexity int32) domain.ChallengeType {
 	// Ultra-enhanced seed for maximum randomness
-	seed := time.Now().UnixNano() + 
-		int64(rand.Intn(1000000)) + 
-		int64(complexity*7919) + 
-		int64(time.Now().Nanosecond()) + 
+	// Generate entropy for randomness (rand.Seed deprecated in Go 1.20+)
+	_ = time.Now().UnixNano() +
+		int64(rand.Intn(1000000)) +
+		int64(complexity*7919) +
+		int64(time.Now().Nanosecond()) +
 		int64(os.Getpid()*23) +
 		int64(time.Now().Second()*1000)
-	rand.Seed(seed)
-	
+
 	// Available challenge types (including game for high complexity)
 	challengeTypes := []domain.ChallengeType{
 		domain.ChallengeTypeClick,
@@ -187,19 +195,19 @@ func (u *captchaUsecase) determineChallengeType(complexity int32) domain.Challen
 		domain.ChallengeTypeSwipe,
 		domain.ChallengeTypeGame,
 	}
-	
+
 	// More balanced weights for better distribution
 	weights := make([]int, len(challengeTypes))
-	
+
 	// Add some randomness to weights themselves
 	randomFactor := rand.Intn(20) - 10 // -10 to +10
-	
+
 	if complexity < 30 {
 		// Low complexity - slightly favor simple types, no games
-		weights[0] = 40 + randomFactor // Click
+		weights[0] = 40 + randomFactor  // Click
 		weights[1] = 30 + rand.Intn(20) // Drag&Drop
 		weights[2] = 30 + rand.Intn(20) // Swipe
-		weights[3] = 0 // No games for low complexity
+		weights[3] = 0                  // No games for low complexity
 	} else if complexity < 60 {
 		// Medium complexity - balanced with occasional games
 		weights[0] = 30 + rand.Intn(15) // Click
@@ -213,30 +221,30 @@ func (u *captchaUsecase) determineChallengeType(complexity int32) domain.Challen
 		weights[2] = 25 + rand.Intn(15) // Swipe
 		weights[3] = 30 + rand.Intn(20) // More games for high complexity
 	}
-	
+
 	// Ensure all weights are positive
 	for i := range weights {
 		if weights[i] < 1 {
 			weights[i] = 1
 		}
 	}
-	
+
 	// Weighted random selection
 	totalWeight := 0
 	for _, weight := range weights {
 		totalWeight += weight
 	}
-	
+
 	randomValue := rand.Intn(totalWeight)
 	currentWeight := 0
-	
+
 	for i, weight := range weights {
 		currentWeight += weight
 		if randomValue < currentWeight {
 			return challengeTypes[i]
 		}
 	}
-	
+
 	// Fallback (should never reach here)
 	return challengeTypes[rand.Intn(len(challengeTypes))]
 }

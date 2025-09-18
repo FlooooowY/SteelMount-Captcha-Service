@@ -314,7 +314,7 @@ func TestSecurityService_Stats(t *testing.T) {
 
 	// Make some requests
 	for i := 0; i < 10; i++ {
-		securityService.CheckRequest(ctx, ip, userAgent, path, time.Millisecond*100, false)
+			_, _ = securityService.CheckRequest(ctx, ip, userAgent, path, time.Millisecond*100, false)
 	}
 
 	// Get stats

@@ -503,13 +503,14 @@ func (g *SwipeGenerator) calculateSwipeCount(complexity int32) int {
 func (g *SwipeGenerator) generateSwipeAreas(numSwipes int) ([]SwipeArea, []map[string]interface{}) {
 	// Ultra-random seed for infinite variations
 	// Ultra-enhanced seed for infinite variations
-	seed := time.Now().UnixNano() + 
+	// Generate entropy for randomness (not used with deprecated rand.Seed)
+	_ = time.Now().UnixNano() + 
 		int64(rand.Intn(1000000)) + 
 		int64(numSwipes*11117) + 
 		int64(g.canvasWidth*g.canvasHeight) + 
 		int64(time.Now().Nanosecond()) + 
 		int64(os.Getpid()*17)
-	rand.Seed(seed)
+	// rand.Seed is deprecated in Go 1.20+, using default random source
 
 	swipeAreas := make([]SwipeArea, numSwipes)
 	correctSequence := make([]map[string]interface{}, 0, numSwipes)

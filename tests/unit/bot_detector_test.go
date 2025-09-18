@@ -112,8 +112,8 @@ func TestBotDetector_Cleanup(t *testing.T) {
 	ctx := context.Background()
 
 	// Create some request patterns
-	detector.AnalyzeRequest(ctx, "192.168.1.1", "Mozilla/5.0", "/api/captcha", time.Millisecond*100, false)
-	detector.AnalyzeRequest(ctx, "192.168.1.2", "Mozilla/5.0", "/api/captcha", time.Millisecond*100, false)
+	_, _ = detector.AnalyzeRequest(ctx, "192.168.1.1", "Mozilla/5.0", "/api/captcha", time.Millisecond*100, false)
+	_, _ = detector.AnalyzeRequest(ctx, "192.168.1.2", "Mozilla/5.0", "/api/captcha", time.Millisecond*100, false)
 
 	// Get initial stats
 	initialStats := detector.GetStats()

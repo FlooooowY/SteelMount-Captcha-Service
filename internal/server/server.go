@@ -377,25 +377,88 @@ func (s *Server) GetMetricsMiddleware() *monitoring.MetricsMiddleware {
 	return s.metricsMW
 }
 
-// findAvailablePort finds an available port in the configured range
-func (s *Server) findAvailablePort() (int, error) {
-	return s.findAvailablePortFrom(s.config.Server.MinPort)
+// registerWebSocketHandlers registers WebSocket event handlers
+func (s *Server) registerWebSocketHandlers(captchaUsecase usecase.CaptchaUsecase) {
+	if s.wsServer == nil {
+		return
+	}
+	
+	wsService := s.wsServer.GetWebSocketService()
+	
+	// Register create_challenge handler
+	wsService.RegisterHandler("create_challenge", func(ctx context.Context, event *websocket.Event) error {
+		// Extract challenge type and complexity from event data
+		challengeType, ok := event.Data["challenge_type"].(string)
+		if !ok {
+			return fmt.Errorf("invalid challenge_type")
+		}
+		
+		complexity, ok := event.Data["complexity"].(float64)
+		if !ok {
+			return fmt.Errorf("invalid complexity")
+		}
+		
+		// Create challenge
+		challenge, err := captchaUsecase.CreateChallenge(ctx, int32(complexity))
+		if err != nil {
+			return fmt.Errorf("failed to create challenge: %w", err)
+		}
+		
+		// Use HTML content from challenge
+		htmlContent := challenge.HTML
+		
+		// Send response event
+		responseEvent := &websocket.Event{
+			ID:        fmt.Sprintf("resp_%d", time.Now().UnixNano()),
+			Type:      "challenge_created",
+			Data: map[string]interface{}{
+				"challenge_id":   challenge.ID,
+				"challenge_type": challengeType,
+				"html_content":   htmlContent,
+				"complexity":     complexity,
+			},
+			Timestamp: time.Now(),
+			ClientID:  event.ClientID,
+		}
+		
+		return wsService.SendEvent(event.ClientID, responseEvent)
+	})
+	
+	// Register validate_challenge handler
+	wsService.RegisterHandler("validate_challenge", func(ctx context.Context, event *websocket.Event) error {
+		// Extract challenge ID and answer from event data
+		challengeID, ok := event.Data["challenge_id"].(string)
+		if !ok {
+			return fmt.Errorf("invalid challenge_id")
+		}
+		
+		answer := event.Data["answer"]
+		
+		// Validate challenge
+		result, err := captchaUsecase.ValidateChallenge(ctx, challengeID, answer)
+		if err != nil {
+			return fmt.Errorf("failed to validate challenge: %w", err)
+		}
+		
+		// Send response event
+		responseEvent := &websocket.Event{
+			ID:        fmt.Sprintf("resp_%d", time.Now().UnixNano()),
+			Type:      "challenge_validated",
+			Data: map[string]interface{}{
+				"challenge_id": result.ChallengeID,
+				"solved":       result.Solved,
+				"confidence":   result.ConfidencePercent,
+				"time_taken":   result.TimeToSolve,
+			},
+			Timestamp: time.Now(),
+			ClientID:  event.ClientID,
+		}
+		
+		return wsService.SendEvent(event.ClientID, responseEvent)
+	})
 }
 
-// findAvailablePortFrom finds an available port starting from the specified port
-func (s *Server) findAvailablePortFrom(startPort int) (int, error) {
-	for port := startPort; port <= s.config.Server.MaxPort; port++ {
-		addr := fmt.Sprintf(":%d", port)
-		listener, err := net.Listen("tcp", addr)
-		if err == nil {
-			listener.Close()
-			// Add delay to ensure port is fully released
-			time.Sleep(50 * time.Millisecond)
-			return port, nil
-		}
-	}
-	return 0, fmt.Errorf("no available ports in range %d-%d", startPort, s.config.Server.MaxPort)
-}
+// Note: findAvailablePortFrom function was removed as it's unused
 
 // registerServices registers gRPC services
 func (s *Server) registerServices() {
@@ -410,6 +473,10 @@ func (s *Server) registerServices() {
 	captchaService := grpc.NewCaptchaService(captchaUsecase)
 
 	pb.RegisterCaptchaServiceServer(s.grpcServer, captchaService)
+	
+	// Register WebSocket event handlers
+	s.registerWebSocketHandlers(captchaUsecase)
+	
 	s.logger.Info("Services registered")
 }
 

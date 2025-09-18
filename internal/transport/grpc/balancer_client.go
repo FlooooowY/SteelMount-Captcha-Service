@@ -27,7 +27,7 @@ type BalancerClient struct {
 // NewBalancerClient creates a new balancer client
 func NewBalancerClient(balancerURL, instanceID, host, challengeType string, port int) (*BalancerClient, error) {
 	// Create gRPC connection
-	conn, err := grpc.Dial(balancerURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(balancerURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to balancer: %w", err)
 	}
